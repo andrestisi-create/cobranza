@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell($paths = @\\(\"C:\\\\Program Files\\\\Docker\\\\Docker\\\\resources\\\\bin\\\\docker.exe\",\"C:\\\\Program Files\\\\PostgreSQL\"\\); foreach\\($p in $paths\\){ if\\(Test-Path $p\\){ \"FOUND: $p\" } else { \"missing: $p\" } }; \"---psql---\"; try{ \\(Get-Command psql -ErrorAction Stop\\).Source }catch{ \"psql not in PATH\" }; \"---docker---\"; try{ \\(Get-Command docker -ErrorAction Stop\\).Source }catch{ \"docker not in PATH\" })"
-    ]
-  }
-}
