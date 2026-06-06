@@ -1,0 +1,194 @@
+// Esquema de datos — Software de Cobranza y Pre-Cobranza (empresa de educación)
+// Montos en CLP (enteros, sin decimales) -> Decimal(14,0).
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------- Enums -----------------------
+
+enum RolUsuario {
+  ADMIN
+  SUPERVISOR
+  COBRADOR
+}
+
+enum EstadoNegocio {
+  MATRICULADO
+  DE_BAJA
+  DESISTE
+}
+
+enum TipoNegocio {
+  CORPORATIVO
+  RETAIL
+}
+
+enum TipoVenta {
+  SENCE
+  NO_SENCE
+}
+
+enum TipoDocto {
+  FACTURA
+  BOLETA
+  ORDEN_COMPRA
+}
+
+enum TipoOC {
+  OTIC
+  EMPRESA
+}
+
+enum EstadoOC {
+  PENDIENTE
+  FACTURADA
+  PAGADA
+  ANULADA
+}
+
+enum MedioPago {
+  TRANSFERENCIA
+  CHEQUE
+  EFECTIVO
+  TARJETA
+  OTRO
+}
+
+// ----------------------- Modelos -----------------------
+
+model Usuario {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  nombre       String
+  passwordHash String
+  rol          RolUsuario @default(COBRADOR)
+  activo       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+
+  pagosRegistrados Pago[] @relation("PagoRegistradoPor")
+
+  @@map("usuarios")
+}
+
+model Alumno {
+  idAlumno        String    @id @default(cuid())
+  nombre          String
+  segundoNombre   String?
+  apellidoPaterno String
+  apellidoMaterno String?
+  direccion       String?
+  fechaNacimiento DateTime?
+  rut             String?   @unique
+  email           String?
+  telefono        String?
+  createdAt       DateTime  @default(now())
+
+  negocios Negocio[]
+
+  @@index([apellidoPaterno])
+  @@map("alumnos")
+}
+
+model Programa {
+  codPrograma String    @id
+  descripcion String
+  fechaInicio DateTime
+  fechaFin    DateTime
+  valor       Decimal?  @db.Decimal(14, 0)
+
+  negocios Negocio[]
+
+  @@map("programas")
+}
+
+/// Tabla madre del negocio. El pago se asocia a este RecordID, no a la factura.
+model Negocio {
+  recordId      String        @id @default(cuid())
+  idAlumno      String
+  codPrograma   String
+  fechaCreacion DateTime      @default(now())
+  estadoNegocio EstadoNegocio @default(MATRICULADO)
+  montoNegocio  Decimal       @db.Decimal(14, 0)
+  tipoNegocio   TipoNegocio
+  tipoVenta     TipoVenta
+  tipoDocto     TipoDocto
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  alumno   Alumno   @relation(fields: [idAlumno], references: [idAlumno])
+  programa Programa @relation(fields: [codPrograma], references: [codPrograma])
+
+  pagos         Pago[]
+  ordenesCompra OrdenCompra[]
+  documentos    DocumentoTributario[]
+
+  @@index([idAlumno])
+  @@index([codPrograma])
+  @@index([tipoVenta])
+  @@index([estadoNegocio])
+  @@map("negocios")
+}
+
+/// Órdenes de compra para ventas Sence (varias por negocio: OTIC y/o Empresa).
+model OrdenCompra {
+  id            String   @id @default(cuid())
+  recordId      String
+  tipoOC        TipoOC
+  numeroOC      String
+  entidadNombre String
+  entidadRut    String?
+  monto         Decimal  @db.Decimal(14, 0)
+  fechaOC       DateTime?
+  estadoOC      EstadoOC @default(PENDIENTE)
+  observacion   String?
+  createdAt     DateTime @default(now())
+
+  negocio Negocio @relation(fields: [recordId], references: [recordId], onDelete: Cascade)
+
+  @@index([recordId])
+  @@index([tipoOC])
+  @@map("ordenes_compra")
+}
+
+/// Pago asociado al RecordID del negocio. Varios pagos por negocio.
+model Pago {
+  id             String    @id @default(cuid())
+  recordId       String
+  fechaPago      DateTime  @default(now())
+  montoPago      Decimal   @db.Decimal(14, 0)
+  medioPago      MedioPago @default(TRANSFERENCIA)
+  referencia     String?
+  observacion    String?
+  registradoPorId String?
+  createdAt      DateTime  @default(now())
+
+  negocio       Negocio  @relation(fields: [recordId], references: [recordId], onDelete: Cascade)
+  registradoPor Usuario? @relation("PagoRegistradoPor", fields: [registradoPorId], references: [id])
+
+  @@index([recordId])
+  @@map("pagos")
+}
+
+/// Documento tributario (factura/boleta). Meramente informativo.
+/// Su existencia indica que el negocio ya tiene documento (clave para pre-cobranza).
+model DocumentoTributario {
+  id          String    @id @default(cuid())
+  recordId    String
+  tipoDocto   TipoDocto
+  folio       String?
+  fechaEmision DateTime?
+  monto       Decimal?  @db.Decimal(14, 0)
+  createdAt   DateTime  @default(now())
+
+  negocio Negocio @relation(fields: [recordId], references: [recordId], onDelete: Cascade)
+
+  @@index([recordId])
+  @@map("documentos_tributarios")
+}
