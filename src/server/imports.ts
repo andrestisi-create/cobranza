@@ -128,6 +128,37 @@ export async function importarProgramas(
 // Importar negocios (alumno identificado por RUT)
 // ─────────────────────────────────────────────
 
+interface OcImport {
+  tipo: "OTIC" | "OTEC" | "EMPRESA";
+  numero: string;
+  entidadNombre: string;
+  entidadRut: string | null;
+  monto: number;
+}
+
+function extraerOcs(r: Record<string, string>): OcImport[] {
+  const ocs: OcImport[] = [];
+  for (const n of [1, 2, 3] as const) {
+    const numero = r[`oc${n}Numero`]?.trim();
+    const entidadNombre = r[`oc${n}EntidadNombre`]?.trim();
+    const monto = Number(r[`oc${n}Monto`]?.trim());
+    if (!numero || !entidadNombre || !(monto > 0)) continue;
+
+    const tipoRaw = r[`oc${n}Tipo`]?.trim().toUpperCase();
+    const tipo: "OTIC" | "OTEC" | "EMPRESA" =
+      tipoRaw === "OTEC" ? "OTEC" : tipoRaw === "EMPRESA" ? "EMPRESA" : "OTIC";
+
+    ocs.push({
+      tipo,
+      numero,
+      entidadNombre,
+      entidadRut: r[`oc${n}EntidadRut`]?.trim() || null,
+      monto,
+    });
+  }
+  return ocs;
+}
+
 export async function importarNegocios(
   _prev: ActionState,
   fd: FormData,
@@ -151,6 +182,13 @@ export async function importarNegocios(
     const r = rows[i];
     const fila = i + 2;
     try {
+      // Validar recordId
+      const recordId = r.recordId?.trim();
+      if (!recordId || !/^\d+$/.test(recordId)) {
+        errores.push({ fila, mensaje: "Record ID inválido (debe ser un número entero)" });
+        continue;
+      }
+
       // Buscar alumno por RUT
       const alumno = await prisma.alumno.findFirst({
         where: { rut: r.rutAlumno?.trim() },
@@ -158,7 +196,7 @@ export async function importarNegocios(
       if (!alumno) {
         errores.push({
           fila,
-          mensaje: `Alumno con RUT "${r.rutAlumno?.trim()}" no encontrado en el sistema`,
+          mensaje: `Alumno con RUT "${r.rutAlumno?.trim()}" no encontrado`,
         });
         continue;
       }
@@ -170,7 +208,7 @@ export async function importarNegocios(
       if (!programa) {
         errores.push({
           fila,
-          mensaje: `Programa "${r.codPrograma?.trim()}" no encontrado en el sistema`,
+          mensaje: `Programa "${r.codPrograma?.trim()}" no encontrado`,
         });
         continue;
       }
@@ -189,8 +227,9 @@ export async function importarNegocios(
         r.estadoNegocio?.trim().toUpperCase() || "MATRICULADO"
       ) as "MATRICULADO" | "DE_BAJA" | "DESISTE";
 
-      await prisma.negocio.create({
+      const negocio = await prisma.negocio.create({
         data: {
+          recordId,
           idAlumno: alumno.idAlumno,
           codPrograma: programa.codPrograma,
           montoNegocio: Number(r.montoNegocio?.trim()),
@@ -200,11 +239,28 @@ export async function importarNegocios(
           estadoNegocio,
         },
       });
+
+      // Crear OCs si vienen en el CSV
+      const ocsImport = extraerOcs(r);
+      for (const oc of ocsImport) {
+        await prisma.ordenCompra.create({
+          data: {
+            recordId: negocio.recordId,
+            tipoOC: oc.tipo,
+            numeroOC: oc.numero,
+            entidadNombre: oc.entidadNombre,
+            entidadRut: oc.entidadRut,
+            monto: oc.monto,
+            estadoOC: "PENDIENTE",
+          },
+        });
+      }
+
       creados++;
     } catch {
       errores.push({
         fila,
-        mensaje: "No se pudo crear el negocio (verifique los datos)",
+        mensaje: "No se pudo crear el negocio (¿Record ID duplicado?)",
       });
     }
   }

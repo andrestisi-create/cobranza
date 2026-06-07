@@ -60,6 +60,7 @@ interface OcPendiente {
 // ─────────────────────────────────────────────
 
 const COLUMNAS_NEGOCIOS: ColConfig[] = [
+  { campo: "recordId",     label: "Record ID",       requerido: true,  tipo: "numero", descripcion: "Número entero sin puntos ni guiones. Ej: 10001" },
   { campo: "rutAlumno",    label: "RUT del alumno",  requerido: true,  descripcion: "El alumno debe existir en el sistema con ese RUT" },
   { campo: "codPrograma",  label: "Código programa", requerido: true,  descripcion: "El programa debe existir en el sistema" },
   { campo: "montoNegocio", label: "Monto (CLP)",     requerido: true,  tipo: "numero" },
@@ -67,6 +68,24 @@ const COLUMNAS_NEGOCIOS: ColConfig[] = [
   { campo: "tipoVenta",    label: "Tipo venta",      requerido: true,  valoresPermitidos: ["SENCE", "NO_SENCE"] },
   { campo: "tipoDocto",    label: "Tipo documento",  requerido: true,  valoresPermitidos: ["FACTURA", "BOLETA", "ORDEN_COMPRA"] },
   { campo: "estadoNegocio",label: "Estado",          requerido: false, valoresPermitidos: ["MATRICULADO", "DE_BAJA", "DESISTE"], descripcion: "Vacío = MATRICULADO" },
+  // ── Orden de Compra 1 ──────────────────────────────────────────────────────
+  { campo: "oc1Tipo",          label: "OC 1 - Tipo",         requerido: false, valoresPermitidos: ["OTIC","OTEC","EMPRESA"], descripcion: "Primera OC (opcional)" },
+  { campo: "oc1Numero",        label: "OC 1 - N° OC",        requerido: false },
+  { campo: "oc1EntidadNombre", label: "OC 1 - Entidad",      requerido: false },
+  { campo: "oc1EntidadRut",    label: "OC 1 - RUT entidad",  requerido: false },
+  { campo: "oc1Monto",         label: "OC 1 - Monto (CLP)",  requerido: false, tipo: "numero" },
+  // ── Orden de Compra 2 ──────────────────────────────────────────────────────
+  { campo: "oc2Tipo",          label: "OC 2 - Tipo",         requerido: false, valoresPermitidos: ["OTIC","OTEC","EMPRESA"] },
+  { campo: "oc2Numero",        label: "OC 2 - N° OC",        requerido: false },
+  { campo: "oc2EntidadNombre", label: "OC 2 - Entidad",      requerido: false },
+  { campo: "oc2EntidadRut",    label: "OC 2 - RUT entidad",  requerido: false },
+  { campo: "oc2Monto",         label: "OC 2 - Monto (CLP)",  requerido: false, tipo: "numero" },
+  // ── Orden de Compra 3 ──────────────────────────────────────────────────────
+  { campo: "oc3Tipo",          label: "OC 3 - Tipo",         requerido: false, valoresPermitidos: ["OTIC","OTEC","EMPRESA"] },
+  { campo: "oc3Numero",        label: "OC 3 - N° OC",        requerido: false },
+  { campo: "oc3EntidadNombre", label: "OC 3 - Entidad",      requerido: false },
+  { campo: "oc3EntidadRut",    label: "OC 3 - RUT entidad",  requerido: false },
+  { campo: "oc3Monto",         label: "OC 3 - Monto (CLP)",  requerido: false, tipo: "numero" },
 ];
 
 // ─────────────────────────────────────────────
@@ -379,6 +398,22 @@ function FormNegocio({
           : "Nuevo negocio"}
       </p>
 
+      {/* Record ID (solo creación) */}
+      {!esEdicion && (
+        <div>
+          <label className={labelCls}>Record ID *</label>
+          <input
+            name="recordId"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]+"
+            required
+            placeholder="Ej: 10001 (solo números, sin puntos)"
+            className={inputCls}
+          />
+        </div>
+      )}
+
       {/* Campos del negocio */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <div className="col-span-2 md:col-span-1">
@@ -612,6 +647,8 @@ export function NegociosManager({
           <tbody>
             {negocios.map((n) => {
               const totalOC = n.ordenes.reduce((s, o) => s + o.monto, 0);
+              const ocDescubierta =
+                n.tipoDocto === "ORDEN_COMPRA" && totalOC < n.montoNegocio;
               return (
                 <tr
                   key={n.recordId}
@@ -644,10 +681,25 @@ export function NegociosManager({
                   <td className="px-3 py-2 text-center">
                     {n.ordenes.length > 0 ? (
                       <span
-                        title={`${n.ordenes.length} OC · ${formatCLP(totalOC)}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700"
+                        title={
+                          ocDescubierta
+                            ? `⚠ OC insuficiente — Total OC: ${formatCLP(totalOC)} · Faltan: ${formatCLP(n.montoNegocio - totalOC)}`
+                            : `${n.ordenes.length} OC · Total: ${formatCLP(totalOC)}`
+                        }
+                        className={`inline-flex cursor-help items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          ocDescubierta
+                            ? "bg-red-100 text-red-700"
+                            : "bg-indigo-100 text-indigo-700"
+                        }`}
                       >
                         {n.ordenes.length}
+                      </span>
+                    ) : n.tipoDocto === "ORDEN_COMPRA" ? (
+                      <span
+                        title={`⚠ Sin OC — Faltan: ${formatCLP(n.montoNegocio)}`}
+                        className="inline-flex cursor-help items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700"
+                      >
+                        0
                       </span>
                     ) : (
                       <span className="text-slate-300">—</span>

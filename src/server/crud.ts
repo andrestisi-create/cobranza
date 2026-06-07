@@ -217,11 +217,16 @@ export async function crearNegocio(
   const parsed = negocioSchema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: parsed.error.errors[0]?.message };
   const d = parsed.data;
+  const recordIdInput = String(fd.get("recordId") ?? "").trim();
+  if (!recordIdInput || !/^\d+$/.test(recordIdInput)) {
+    return { error: "El Record ID debe ser un número entero (solo dígitos, sin puntos ni guiones)" };
+  }
   const ocsNuevas = parseOcs(fd);
   try {
     const idVendedor = opt(fd.get("idVendedor"));
     const negocio = await prisma.negocio.create({
       data: {
+        recordId: recordIdInput,
         idAlumno: d.idAlumno,
         codPrograma: d.codPrograma,
         montoNegocio: d.montoNegocio,
