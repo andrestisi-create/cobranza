@@ -96,6 +96,7 @@ async function main() {
   // ---- Negocios + pagos + OCs + documentos ----
   // Mezcla de Corporativo/Retail, Sence/No Sence, estados y avance de pago.
   type NegocioSeed = {
+    recordId: string;
     alumnoIdx: number;
     codPrograma: string;
     monto: number;
@@ -104,12 +105,13 @@ async function main() {
     tipoDocto: "FACTURA" | "BOLETA" | "ORDEN_COMPRA";
     estadoNegocio: "MATRICULADO" | "DE_BAJA" | "DESISTE";
     pagos: { monto: number; medio: "TRANSFERENCIA" | "CHEQUE" | "EFECTIVO" | "TARJETA" | "OTRO" }[];
-    ocs?: { tipo: "OTIC" | "EMPRESA"; numero: string; entidad: string; monto: number; estado?: "PENDIENTE" | "FACTURADA" | "PAGADA" | "ANULADA" }[];
+    ocs?: { tipo: "OTIC" | "OTEC" | "EMPRESA"; numero: string; entidad: string; monto: number; estado?: "PENDIENTE" | "FACTURADA" | "PAGADA" | "ANULADA" }[];
     conDocumento?: boolean;
   };
 
   const negocios: NegocioSeed[] = [
     {
+      recordId: "60178145390",
       alumnoIdx: 0, codPrograma: codProg[0], monto: 1800000,
       tipoNegocio: "CORPORATIVO", tipoVenta: "SENCE", tipoDocto: "ORDEN_COMPRA", estadoNegocio: "MATRICULADO",
       pagos: [{ monto: 900000, medio: "TRANSFERENCIA" }],
@@ -120,12 +122,14 @@ async function main() {
       conDocumento: false,
     },
     {
+      recordId: "60178145391",
       alumnoIdx: 1, codPrograma: codProg[1], monto: 450000,
       tipoNegocio: "RETAIL", tipoVenta: "NO_SENCE", tipoDocto: "BOLETA", estadoNegocio: "MATRICULADO",
       pagos: [{ monto: 450000, medio: "TARJETA" }],
       conDocumento: true,
     },
     {
+      recordId: "60178145392",
       alumnoIdx: 2, codPrograma: codProg[2], monto: 2100000,
       tipoNegocio: "CORPORATIVO", tipoVenta: "SENCE", tipoDocto: "ORDEN_COMPRA", estadoNegocio: "MATRICULADO",
       pagos: [],
@@ -135,18 +139,21 @@ async function main() {
       conDocumento: false,
     },
     {
+      recordId: "60178145393",
       alumnoIdx: 3, codPrograma: codProg[0], monto: 1800000,
       tipoNegocio: "RETAIL", tipoVenta: "NO_SENCE", tipoDocto: "FACTURA", estadoNegocio: "MATRICULADO",
       pagos: [{ monto: 600000, medio: "TRANSFERENCIA" }, { monto: 600000, medio: "TRANSFERENCIA" }],
       conDocumento: true,
     },
     {
+      recordId: "60178145394",
       alumnoIdx: 4, codPrograma: codProg[1], monto: 450000,
       tipoNegocio: "RETAIL", tipoVenta: "NO_SENCE", tipoDocto: "BOLETA", estadoNegocio: "DESISTE",
       pagos: [],
       conDocumento: false,
     },
     {
+      recordId: "60178145395",
       alumnoIdx: 5, codPrograma: codProg[2], monto: 2100000,
       tipoNegocio: "CORPORATIVO", tipoVenta: "SENCE", tipoDocto: "ORDEN_COMPRA", estadoNegocio: "MATRICULADO",
       pagos: [{ monto: 1050000, medio: "TRANSFERENCIA" }, { monto: 1050000, medio: "CHEQUE" }],
@@ -157,6 +164,7 @@ async function main() {
       conDocumento: true,
     },
     {
+      recordId: "60178145396",
       alumnoIdx: 6, codPrograma: codProg[0], monto: 1800000,
       tipoNegocio: "CORPORATIVO", tipoVenta: "SENCE", tipoDocto: "ORDEN_COMPRA", estadoNegocio: "MATRICULADO",
       pagos: [{ monto: 500000, medio: "TRANSFERENCIA" }],
@@ -166,12 +174,14 @@ async function main() {
       conDocumento: false,
     },
     {
+      recordId: "60178145397",
       alumnoIdx: 7, codPrograma: codProg[1], monto: 450000,
       tipoNegocio: "RETAIL", tipoVenta: "NO_SENCE", tipoDocto: "BOLETA", estadoNegocio: "MATRICULADO",
       pagos: [{ monto: 150000, medio: "EFECTIVO" }],
       conDocumento: true,
     },
     {
+      recordId: "60178145398",
       alumnoIdx: 8, codPrograma: codProg[2], monto: 2100000,
       tipoNegocio: "CORPORATIVO", tipoVenta: "SENCE", tipoDocto: "ORDEN_COMPRA", estadoNegocio: "DE_BAJA",
       pagos: [],
@@ -181,12 +191,14 @@ async function main() {
       conDocumento: false,
     },
     {
+      recordId: "60178145399",
       alumnoIdx: 9, codPrograma: codProg[0], monto: 1800000,
       tipoNegocio: "RETAIL", tipoVenta: "NO_SENCE", tipoDocto: "FACTURA", estadoNegocio: "MATRICULADO",
       pagos: [{ monto: 1800000, medio: "TRANSFERENCIA" }],
       conDocumento: true,
     },
     {
+      recordId: "60178145400",
       alumnoIdx: 0, codPrograma: codProg[1], monto: 450000,
       tipoNegocio: "CORPORATIVO", tipoVenta: "SENCE", tipoDocto: "ORDEN_COMPRA", estadoNegocio: "MATRICULADO",
       pagos: [],
@@ -197,6 +209,7 @@ async function main() {
       conDocumento: false,
     },
     {
+      recordId: "60178145401",
       alumnoIdx: 3, codPrograma: codProg[2], monto: 2100000,
       tipoNegocio: "CORPORATIVO", tipoVenta: "SENCE", tipoDocto: "ORDEN_COMPRA", estadoNegocio: "MATRICULADO",
       pagos: [{ monto: 700000, medio: "TRANSFERENCIA" }],
@@ -206,12 +219,14 @@ async function main() {
       conDocumento: false,
     },
     {
+      recordId: "60178145402",
       alumnoIdx: 5, codPrograma: codProg[1], monto: 450000,
       tipoNegocio: "RETAIL", tipoVenta: "NO_SENCE", tipoDocto: "BOLETA", estadoNegocio: "MATRICULADO",
       pagos: [{ monto: 225000, medio: "TARJETA" }],
       conDocumento: false,
     },
     {
+      recordId: "60178145403",
       alumnoIdx: 6, codPrograma: codProg[2], monto: 2100000,
       tipoNegocio: "RETAIL", tipoVenta: "NO_SENCE", tipoDocto: "FACTURA", estadoNegocio: "MATRICULADO",
       pagos: [{ monto: 2100000, medio: "TRANSFERENCIA" }],
@@ -223,6 +238,7 @@ async function main() {
   for (const n of negocios) {
     const negocio = await prisma.negocio.create({
       data: {
+        recordId: n.recordId,
         idAlumno: alumnos[n.alumnoIdx].idAlumno,
         codPrograma: n.codPrograma,
         montoNegocio: n.monto,

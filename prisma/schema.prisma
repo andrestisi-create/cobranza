@@ -124,7 +124,7 @@ model Vendedor {
 
 /// Tabla madre del negocio. El pago se asocia a este RecordID, no a la factura.
 model Negocio {
-  recordId      String        @id @default(cuid())
+  recordId      String        @id
   idAlumno      String
   codPrograma   String
   idVendedor    String?

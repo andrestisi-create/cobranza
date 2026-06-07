@@ -60,7 +60,7 @@ interface OcPendiente {
 // ─────────────────────────────────────────────
 
 const COLUMNAS_NEGOCIOS: ColConfig[] = [
-  { campo: "recordId",     label: "Record ID",       requerido: true,  tipo: "numero", descripcion: "Número entero sin puntos ni guiones. Ej: 10001" },
+  { campo: "recordId",     label: "Record ID",       requerido: true,  tipo: "numero", descripcion: "Número de 11 dígitos sin puntos ni guiones. Ej: 60178145390" },
   { campo: "rutAlumno",    label: "RUT del alumno",  requerido: true,  descripcion: "El alumno debe existir en el sistema con ese RUT" },
   { campo: "codPrograma",  label: "Código programa", requerido: true,  descripcion: "El programa debe existir en el sistema" },
   { campo: "montoNegocio", label: "Monto (CLP)",     requerido: true,  tipo: "numero" },
@@ -408,7 +408,7 @@ function FormNegocio({
             inputMode="numeric"
             pattern="[0-9]+"
             required
-            placeholder="Ej: 10001 (solo números, sin puntos)"
+            placeholder="Ej: 60178145390 (11 dígitos)"
             className={inputCls}
           />
         </div>
