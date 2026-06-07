@@ -54,6 +54,7 @@ const ETIQUETAS: Record<string, string> = {
   ORDEN_COMPRA: "Orden de Compra",
   // TipoOC
   OTIC: "OTIC",
+  OTEC: "OTEC",
   EMPRESA: "Empresa",
   // EstadoOC
   PENDIENTE: "Pendiente",

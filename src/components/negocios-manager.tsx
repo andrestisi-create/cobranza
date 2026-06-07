@@ -7,61 +7,27 @@ import {
   actualizarEstadoNegocio,
   eliminarNegocio,
 } from "@/server/crud";
+import { eliminarOrdenCompra } from "@/server/actions";
 import { importarNegocios } from "@/server/imports";
 import { ImportCSV, type ColConfig } from "@/components/import-csv";
 import { Combobox, type OpcionCombobox } from "@/components/combobox";
 import type { ActionState } from "@/lib/types";
-import { formatCLP, formatFecha, etiqueta } from "@/lib/format";
+import { formatCLP, etiqueta, formatFecha, toNumber } from "@/lib/format";
 import { TipoVentaBadge } from "@/components/badges";
-
-// ─────────────────────────────────────────────
-// Config importación CSV
-// ─────────────────────────────────────────────
-
-const COLUMNAS_NEGOCIOS: ColConfig[] = [
-  {
-    campo: "rutAlumno",
-    label: "RUT del alumno",
-    requerido: true,
-    descripcion: "El alumno debe existir en el sistema con ese RUT",
-  },
-  {
-    campo: "codPrograma",
-    label: "Código programa",
-    requerido: true,
-    descripcion: "El programa debe existir en el sistema",
-  },
-  { campo: "montoNegocio", label: "Monto (CLP)", requerido: true, tipo: "numero" },
-  {
-    campo: "tipoNegocio",
-    label: "Tipo negocio",
-    requerido: true,
-    valoresPermitidos: ["CORPORATIVO", "RETAIL"],
-  },
-  {
-    campo: "tipoVenta",
-    label: "Tipo venta",
-    requerido: true,
-    valoresPermitidos: ["SENCE", "NO_SENCE"],
-  },
-  {
-    campo: "tipoDocto",
-    label: "Tipo documento",
-    requerido: true,
-    valoresPermitidos: ["FACTURA", "BOLETA", "ORDEN_COMPRA"],
-  },
-  {
-    campo: "estadoNegocio",
-    label: "Estado",
-    requerido: false,
-    valoresPermitidos: ["MATRICULADO", "DE_BAJA", "DESISTE"],
-    descripcion: "Vacío = MATRICULADO",
-  },
-];
 
 // ─────────────────────────────────────────────
 // Tipos
 // ─────────────────────────────────────────────
+
+export interface OcRow {
+  id: string;
+  tipoOC: string;
+  numeroOC: string;
+  entidadNombre: string;
+  entidadRut: string | null;
+  monto: number;
+  estadoOC: string;
+}
 
 export interface NegocioRow {
   recordId: string;
@@ -74,14 +40,277 @@ export interface NegocioRow {
   tipoDocto: string;
   estadoNegocio: string;
   fechaCreacion: string;
+  ordenes: OcRow[];
 }
+
+interface OcPendiente {
+  tempId: string;
+  tipoOC: "OTIC" | "OTEC" | "EMPRESA";
+  numeroOC: string;
+  entidadNombre: string;
+  entidadRut: string;
+  monto: string;
+  estadoOC: "PENDIENTE" | "FACTURADA" | "PAGADA" | "ANULADA";
+}
+
+// ─────────────────────────────────────────────
+// Config importación CSV
+// ─────────────────────────────────────────────
+
+const COLUMNAS_NEGOCIOS: ColConfig[] = [
+  { campo: "rutAlumno",    label: "RUT del alumno",  requerido: true,  descripcion: "El alumno debe existir en el sistema con ese RUT" },
+  { campo: "codPrograma",  label: "Código programa", requerido: true,  descripcion: "El programa debe existir en el sistema" },
+  { campo: "montoNegocio", label: "Monto (CLP)",     requerido: true,  tipo: "numero" },
+  { campo: "tipoNegocio",  label: "Tipo negocio",    requerido: true,  valoresPermitidos: ["CORPORATIVO", "RETAIL"] },
+  { campo: "tipoVenta",    label: "Tipo venta",      requerido: true,  valoresPermitidos: ["SENCE", "NO_SENCE"] },
+  { campo: "tipoDocto",    label: "Tipo documento",  requerido: true,  valoresPermitidos: ["FACTURA", "BOLETA", "ORDEN_COMPRA"] },
+  { campo: "estadoNegocio",label: "Estado",          requerido: false, valoresPermitidos: ["MATRICULADO", "DE_BAJA", "DESISTE"], descripcion: "Vacío = MATRICULADO" },
+];
+
+// ─────────────────────────────────────────────
+// Estilos
+// ─────────────────────────────────────────────
 
 const inputCls =
   "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900";
+const inputSmCls =
+  "w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs outline-none focus:border-slate-900";
 const labelCls = "mb-1 block text-xs font-medium text-slate-600";
 
 // ─────────────────────────────────────────────
-// Formulario (crear o editar)
+// Sección de OC (dinámica, pendientes de guardar)
+// ─────────────────────────────────────────────
+
+function SeccionOC({
+  ocsSaved,        // OCs ya en DB (edición)
+  ocsPendientes,
+  onChange,
+  montoNegocio,
+}: {
+  ocsSaved: OcRow[];
+  ocsPendientes: OcPendiente[];
+  onChange: (ocs: OcPendiente[]) => void;
+  montoNegocio: number;
+}) {
+  const agregar = () =>
+    onChange([
+      ...ocsPendientes,
+      {
+        tempId: Math.random().toString(36).slice(2),
+        tipoOC: "OTIC",
+        numeroOC: "",
+        entidadNombre: "",
+        entidadRut: "",
+        monto: "",
+        estadoOC: "PENDIENTE",
+      },
+    ]);
+
+  const actualizar = (idx: number, campo: keyof OcPendiente, valor: string) =>
+    onChange(
+      ocsPendientes.map((oc, i) => (i === idx ? { ...oc, [campo]: valor } : oc)),
+    );
+
+  const quitar = (idx: number) =>
+    onChange(ocsPendientes.filter((_, i) => i !== idx));
+
+  const totalSaved  = ocsSaved.reduce((s, o) => s + o.monto, 0);
+  const totalPend   = ocsPendientes.reduce((s, o) => s + (Number(o.monto) || 0), 0);
+  const totalOC     = totalSaved + totalPend;
+  const diferencia  = montoNegocio - totalOC;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">
+          Órdenes de compra
+        </h4>
+        <button
+          type="button"
+          onClick={agregar}
+          className="flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+        >
+          + Agregar OC
+        </button>
+      </div>
+
+      {/* OCs ya guardadas (solo visible en edición) */}
+      {ocsSaved.length > 0 && (
+        <div className="mb-3 space-y-1.5">
+          <p className="text-xs font-medium text-slate-400">OC guardadas</p>
+          {ocsSaved.map((oc) => (
+            <div
+              key={oc.id}
+              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"
+            >
+              <div className="flex items-center gap-3 text-xs">
+                <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-700">
+                  {etiqueta(oc.tipoOC)}
+                </span>
+                <span className="text-slate-600">{oc.numeroOC}</span>
+                <span className="text-slate-500">{oc.entidadNombre}</span>
+                {oc.entidadRut && (
+                  <span className="text-slate-400">{oc.entidadRut}</span>
+                )}
+                <span className="font-semibold text-slate-800">
+                  {formatCLP(oc.monto)}
+                </span>
+                <span className="text-slate-400">{etiqueta(oc.estadoOC)}</span>
+              </div>
+              <form action={eliminarOrdenCompra}>
+                <input type="hidden" name="id" value={oc.id} />
+                <button
+                  type="submit"
+                  className="text-xs text-red-500 hover:underline"
+                >
+                  Eliminar
+                </button>
+              </form>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* OCs pendientes por agregar */}
+      {ocsPendientes.length > 0 && (
+        <div className="mb-3 space-y-2">
+          {ocsPendientes.length > 0 && (
+            <p className="text-xs font-medium text-slate-400">
+              Nuevas OC (se guardarán al confirmar)
+            </p>
+          )}
+          {ocsPendientes.map((oc, idx) => (
+            <div
+              key={oc.tempId}
+              className="grid grid-cols-12 items-end gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 p-2"
+            >
+              {/* Tipo */}
+              <div className="col-span-2">
+                {idx === 0 && <p className={labelCls}>Tipo</p>}
+                <select
+                  value={oc.tipoOC}
+                  onChange={(e) => actualizar(idx, "tipoOC", e.target.value)}
+                  className={inputSmCls}
+                >
+                  <option value="OTIC">OTIC</option>
+                  <option value="OTEC">OTEC</option>
+                  <option value="EMPRESA">Empresa</option>
+                </select>
+              </div>
+              {/* N° OC */}
+              <div className="col-span-2">
+                {idx === 0 && <p className={labelCls}>N° OC</p>}
+                <input
+                  type="text"
+                  value={oc.numeroOC}
+                  onChange={(e) => actualizar(idx, "numeroOC", e.target.value)}
+                  placeholder="N° OC"
+                  className={inputSmCls}
+                />
+              </div>
+              {/* Entidad */}
+              <div className="col-span-3">
+                {idx === 0 && <p className={labelCls}>Entidad (nombre)</p>}
+                <input
+                  type="text"
+                  value={oc.entidadNombre}
+                  onChange={(e) =>
+                    actualizar(idx, "entidadNombre", e.target.value)
+                  }
+                  placeholder="Nombre entidad"
+                  className={inputSmCls}
+                />
+              </div>
+              {/* RUT entidad */}
+              <div className="col-span-2">
+                {idx === 0 && <p className={labelCls}>RUT (opcional)</p>}
+                <input
+                  type="text"
+                  value={oc.entidadRut}
+                  onChange={(e) =>
+                    actualizar(idx, "entidadRut", e.target.value)
+                  }
+                  placeholder="RUT"
+                  className={inputSmCls}
+                />
+              </div>
+              {/* Monto */}
+              <div className="col-span-2">
+                {idx === 0 && <p className={labelCls}>Monto (CLP)</p>}
+                <input
+                  type="number"
+                  value={oc.monto}
+                  onChange={(e) => actualizar(idx, "monto", e.target.value)}
+                  placeholder="0"
+                  min="1"
+                  step="1"
+                  className={inputSmCls}
+                />
+              </div>
+              {/* Botón quitar */}
+              <div className="col-span-1 flex justify-center">
+                {idx === 0 && <p className={labelCls}>&nbsp;</p>}
+                <button
+                  type="button"
+                  onClick={() => quitar(idx)}
+                  className="rounded-full p-1 text-red-500 hover:bg-red-100"
+                  title="Quitar"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Estado vacío */}
+      {ocsSaved.length === 0 && ocsPendientes.length === 0 && (
+        <p className="text-xs text-slate-400">
+          Sin órdenes de compra. Usa "+ Agregar OC" para asociar una.
+        </p>
+      )}
+
+      {/* Resumen totales */}
+      {(ocsSaved.length + ocsPendientes.length) > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-4 rounded-lg bg-white px-3 py-2 text-xs">
+          <span className="text-slate-500">
+            Total OC:{" "}
+            <strong className="text-indigo-700">{formatCLP(totalOC)}</strong>
+          </span>
+          <span className="text-slate-500">
+            Monto negocio:{" "}
+            <strong className="text-slate-800">
+              {montoNegocio > 0 ? formatCLP(montoNegocio) : "—"}
+            </strong>
+          </span>
+          {montoNegocio > 0 && (
+            <span
+              className={
+                diferencia === 0
+                  ? "font-semibold text-emerald-600"
+                  : diferencia < 0
+                    ? "font-semibold text-red-600"
+                    : "font-semibold text-amber-600"
+              }
+            >
+              {diferencia === 0
+                ? "✓ Cubierto"
+                : diferencia > 0
+                  ? `Faltan ${formatCLP(diferencia)}`
+                  : `Exceso ${formatCLP(Math.abs(diferencia))}`}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Formulario crear / editar negocio
 // ─────────────────────────────────────────────
 
 function FormNegocio({
@@ -96,41 +325,58 @@ function FormNegocio({
   onCancel: () => void;
 }) {
   const esEdicion = editing !== null;
-
-  const [stateCrear, dispatchCrear, pendingCrear] = useActionState<ActionState, FormData>(
-    crearNegocio,
-    undefined,
+  const [ocsPendientes, setOcsPendientes] = useState<OcPendiente[]>([]);
+  const [montoInput, setMontoInput] = useState(
+    editing ? String(editing.montoNegocio) : "",
   );
+
+  const [stateCrear, dispatchCrear, pendingCrear] =
+    useActionState<ActionState, FormData>(crearNegocio, undefined);
   const [stateActualizar, dispatchActualizar, pendingActualizar] =
     useActionState<ActionState, FormData>(actualizarNegocio, undefined);
 
-  const state = esEdicion ? stateActualizar : stateCrear;
+  const state   = esEdicion ? stateActualizar : stateCrear;
   const dispatch = esEdicion ? dispatchActualizar : dispatchCrear;
-  const pending = esEdicion ? pendingActualizar : pendingCrear;
+  const pending  = esEdicion ? pendingActualizar : pendingCrear;
 
-  // Cerrar al guardar con éxito
   useEffect(() => {
-    if (state?.ok) onCancel();
+    if (state?.ok) {
+      setOcsPendientes([]);
+      onCancel();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
+
+  // Resetear OC pendientes al cambiar de negocio editado
+  useEffect(() => {
+    setOcsPendientes([]);
+    setMontoInput(editing ? String(editing.montoNegocio) : "");
+  }, [editing?.recordId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <form
       key={editing?.recordId ?? "new"}
       action={dispatch}
-      className="rounded-xl border border-slate-200 bg-white p-4"
+      className="rounded-xl border border-slate-200 bg-white p-4 space-y-5"
     >
-      {/* Identificador en modo edición */}
       {esEdicion && (
         <input type="hidden" name="recordId" value={editing!.recordId} />
       )}
+      {/* OCs pendientes serializadas */}
+      <input
+        type="hidden"
+        name="ocsNuevas"
+        value={JSON.stringify(ocsPendientes)}
+      />
 
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        {esEdicion ? `Editando negocio · ${editing!.recordId}` : "Nuevo negocio"}
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+        {esEdicion
+          ? `Editando negocio · ${editing!.recordId}`
+          : "Nuevo negocio"}
       </p>
 
+      {/* Campos del negocio */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        {/* Alumno — Combobox con búsqueda por nombre y RUT */}
         <div className="col-span-2 md:col-span-1">
           <label className={labelCls}>Alumno *</label>
           <Combobox
@@ -141,7 +387,6 @@ function FormNegocio({
           />
         </div>
 
-        {/* Programa — Combobox con búsqueda */}
         <div className="col-span-2 md:col-span-1">
           <label className={labelCls}>Programa *</label>
           <Combobox
@@ -152,7 +397,6 @@ function FormNegocio({
           />
         </div>
 
-        {/* Monto */}
         <div>
           <label className={labelCls}>Monto (CLP) *</label>
           <input
@@ -161,12 +405,12 @@ function FormNegocio({
             min="1"
             step="1"
             required
-            defaultValue={editing?.montoNegocio ?? ""}
+            value={montoInput}
+            onChange={(e) => setMontoInput(e.target.value)}
             className={inputCls}
           />
         </div>
 
-        {/* Tipo negocio */}
         <div>
           <label className={labelCls}>Tipo negocio *</label>
           <select
@@ -179,7 +423,6 @@ function FormNegocio({
           </select>
         </div>
 
-        {/* Tipo venta */}
         <div>
           <label className={labelCls}>Tipo venta *</label>
           <select
@@ -192,7 +435,6 @@ function FormNegocio({
           </select>
         </div>
 
-        {/* Tipo documento */}
         <div>
           <label className={labelCls}>Tipo documento *</label>
           <select
@@ -206,7 +448,6 @@ function FormNegocio({
           </select>
         </div>
 
-        {/* Estado */}
         <div>
           <label className={labelCls}>Estado *</label>
           <select
@@ -221,21 +462,23 @@ function FormNegocio({
         </div>
       </div>
 
+      {/* Sección OC */}
+      <SeccionOC
+        ocsSaved={editing?.ordenes ?? []}
+        ocsPendientes={ocsPendientes}
+        onChange={setOcsPendientes}
+        montoNegocio={toNumber(montoInput)}
+      />
+
       {state?.error && (
-        <p className="mt-2 text-xs text-red-600">{state.error}</p>
-      )}
-      {!esEdicion && (
-        <p className="mt-2 text-xs text-slate-400">
-          Para ventas Sence, las órdenes de compra (OTIC/Empresa) se agregan
-          desde el panel de Cobranza.
-        </p>
+        <p className="text-xs text-red-600">{state.error}</p>
       )}
 
-      <div className="mt-3 flex gap-2">
+      <div className="flex gap-2">
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+          className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
         >
           {pending
             ? "Guardando…"
@@ -270,8 +513,15 @@ export function NegociosManager({
   programas: { codPrograma: string; descripcion: string }[];
   puedeGestionar: boolean;
 }) {
-  /** null = cerrado; NegocioRow = editando; "nuevo" = creando */
-  const [modo, setModo] = useState<NegocioRow | "nuevo" | null>(null);
+  // Almacena sólo el recordId (o "nuevo") — se deriva la fila viva desde `negocios`
+  const [modoId, setModoId] = useState<string | "nuevo" | null>(null);
+
+  const editingRow =
+    modoId !== null && modoId !== "nuevo"
+      ? (negocios.find((n) => n.recordId === modoId) ?? null)
+      : null;
+
+  const formAbierto = modoId !== null;
 
   const opcionesAlumno: OpcionCombobox[] = alumnos.map((a) => ({
     valor: a.idAlumno,
@@ -285,18 +535,14 @@ export function NegociosManager({
     subEtiqueta: p.descripcion,
   }));
 
-  const editingRow = modo !== null && modo !== "nuevo" ? (modo as NegocioRow) : null;
-  const formAbierto = modo !== null;
-
   return (
     <div>
       {puedeGestionar && (
         <div className="mb-4 space-y-3">
-          {/* Botones superiores */}
           <div className="flex flex-wrap items-center gap-2">
             {!formAbierto && (
               <button
-                onClick={() => setModo("nuevo")}
+                onClick={() => setModoId("nuevo")}
                 className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
               >
                 + Nuevo negocio
@@ -312,13 +558,12 @@ export function NegociosManager({
             )}
           </div>
 
-          {/* Formulario crear / editar */}
           {formAbierto && (
             <FormNegocio
               editing={editingRow}
               opcionesAlumno={opcionesAlumno}
               opcionesPrograma={opcionesPrograma}
-              onCancel={() => setModo(null)}
+              onCancel={() => setModoId(null)}
             />
           )}
         </div>
@@ -336,83 +581,101 @@ export function NegociosManager({
               <th className="px-3 py-2 text-left">Venta</th>
               <th className="px-3 py-2 text-left">Docto</th>
               <th className="px-3 py-2 text-right">Monto</th>
+              <th className="px-3 py-2 text-center">OC</th>
               <th className="px-3 py-2 text-left">Estado</th>
               {puedeGestionar && <th className="px-3 py-2"></th>}
             </tr>
           </thead>
           <tbody>
-            {negocios.map((n) => (
-              <tr
-                key={n.recordId}
-                className={
-                  editingRow?.recordId === n.recordId
-                    ? "border-b border-indigo-200 bg-indigo-50"
-                    : "border-b border-slate-100 hover:bg-slate-50"
-                }
-              >
-                <td className="px-3 py-2 text-slate-500">
-                  {formatFecha(n.fechaCreacion)}
-                </td>
-                <td className="px-3 py-2 font-medium text-slate-900">
-                  {n.alumnoNombre}
-                </td>
-                <td className="px-3 py-2 text-slate-600">{n.codPrograma}</td>
-                <td className="px-3 py-2 text-slate-600">
-                  {etiqueta(n.tipoNegocio)}
-                </td>
-                <td className="px-3 py-2">
-                  <TipoVentaBadge tipo={n.tipoVenta} />
-                </td>
-                <td className="px-3 py-2 text-slate-600">
-                  {etiqueta(n.tipoDocto)}
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                  {formatCLP(n.montoNegocio)}
-                </td>
-                <td className="px-3 py-2">
-                  {puedeGestionar ? (
-                    <form action={actualizarEstadoNegocio}>
-                      <input type="hidden" name="id" value={n.recordId} />
-                      <select
-                        name="estadoNegocio"
-                        defaultValue={n.estadoNegocio}
-                        onChange={(e) => e.currentTarget.form?.requestSubmit()}
-                        className="rounded-lg border border-slate-300 px-2 py-1 text-xs outline-none focus:border-slate-900"
-                      >
-                        <option value="MATRICULADO">Matriculado</option>
-                        <option value="DE_BAJA">De Baja</option>
-                        <option value="DESISTE">Desiste</option>
-                      </select>
-                    </form>
-                  ) : (
-                    etiqueta(n.estadoNegocio)
-                  )}
-                </td>
-                {puedeGestionar && (
-                  <td className="px-3 py-2 text-right whitespace-nowrap">
-                    <button
-                      onClick={() => {
-                        setModo(n);
-                        // Scroll suave hacia el formulario
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                      className="mr-3 text-xs text-indigo-600 hover:underline"
-                    >
-                      Editar
-                    </button>
-                    <form action={eliminarNegocio} className="inline">
-                      <input type="hidden" name="id" value={n.recordId} />
-                      <button
-                        type="submit"
-                        className="text-xs text-red-500 hover:underline"
-                      >
-                        Eliminar
-                      </button>
-                    </form>
+            {negocios.map((n) => {
+              const totalOC = n.ordenes.reduce((s, o) => s + o.monto, 0);
+              return (
+                <tr
+                  key={n.recordId}
+                  className={
+                    editingRow?.recordId === n.recordId
+                      ? "border-b border-indigo-200 bg-indigo-50"
+                      : "border-b border-slate-100 hover:bg-slate-50"
+                  }
+                >
+                  <td className="px-3 py-2 text-slate-500">
+                    {formatFecha(n.fechaCreacion)}
                   </td>
-                )}
-              </tr>
-            ))}
+                  <td className="px-3 py-2 font-medium text-slate-900">
+                    {n.alumnoNombre}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">{n.codPrograma}</td>
+                  <td className="px-3 py-2 text-slate-600">
+                    {etiqueta(n.tipoNegocio)}
+                  </td>
+                  <td className="px-3 py-2">
+                    <TipoVentaBadge tipo={n.tipoVenta} />
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">
+                    {etiqueta(n.tipoDocto)}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                    {formatCLP(n.montoNegocio)}
+                  </td>
+                  {/* Columna OC */}
+                  <td className="px-3 py-2 text-center">
+                    {n.ordenes.length > 0 ? (
+                      <span
+                        title={`${n.ordenes.length} OC · ${formatCLP(totalOC)}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700"
+                      >
+                        {n.ordenes.length}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    {puedeGestionar ? (
+                      <form action={actualizarEstadoNegocio}>
+                        <input type="hidden" name="id" value={n.recordId} />
+                        <select
+                          name="estadoNegocio"
+                          defaultValue={n.estadoNegocio}
+                          onChange={(e) =>
+                            e.currentTarget.form?.requestSubmit()
+                          }
+                          className="rounded-lg border border-slate-300 px-2 py-1 text-xs outline-none focus:border-slate-900"
+                        >
+                          <option value="MATRICULADO">Matriculado</option>
+                          <option value="DE_BAJA">De Baja</option>
+                          <option value="DESISTE">Desiste</option>
+                        </select>
+                      </form>
+                    ) : (
+                      etiqueta(n.estadoNegocio)
+                    )}
+                  </td>
+                  {puedeGestionar && (
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => {
+                          setModoId(n.recordId);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        className="mr-3 text-xs text-indigo-600 hover:underline"
+                      >
+                        Editar
+                      </button>
+                      <form action={eliminarNegocio} className="inline">
+                        <input type="hidden" name="id" value={n.recordId} />
+                        <button
+                          type="submit"
+                          className="text-xs text-red-500 hover:underline"
+                        >
+                          Eliminar
+                        </button>
+                      </form>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

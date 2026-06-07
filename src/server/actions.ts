@@ -16,7 +16,7 @@ function revalidarCobranza() {
   revalidatePath("/cobranza");
   revalidatePath("/pre-cobranza");
   revalidatePath("/");
-  revalidatePath("/negocios");
+  revalidatePath("/negocios"); // para que se actualicen las OC al volver
 }
 
 // ---------------- Pagos ----------------
@@ -71,7 +71,7 @@ export async function eliminarPago(formData: FormData): Promise<void> {
 
 const ocSchema = z.object({
   recordId: z.string().min(1),
-  tipoOC: z.enum(["OTIC", "EMPRESA"]),
+  tipoOC: z.enum(["OTIC", "OTEC", "EMPRESA"]),
   numeroOC: z.string().min(1, "Indica el número de OC"),
   entidadNombre: z.string().min(1, "Indica la OTIC o empresa"),
   entidadRut: z.string().optional(),

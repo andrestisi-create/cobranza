@@ -43,6 +43,7 @@ enum TipoDocto {
 
 enum TipoOC {
   OTIC
+  OTEC
   EMPRESA
 }
 

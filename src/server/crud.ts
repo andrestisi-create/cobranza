@@ -147,6 +147,26 @@ const negocioSchema = z.object({
   estadoNegocio: z.enum(["MATRICULADO", "DE_BAJA", "DESISTE"]),
 });
 
+interface OcInput {
+  tipoOC: "OTIC" | "OTEC" | "EMPRESA";
+  numeroOC: string;
+  entidadNombre: string;
+  entidadRut?: string;
+  monto: string;
+  estadoOC: "PENDIENTE" | "FACTURADA" | "PAGADA" | "ANULADA";
+}
+
+function parseOcs(fd: FormData): OcInput[] {
+  const raw = fd.get("ocsNuevas");
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(String(raw)) as OcInput[];
+    return Array.isArray(arr) ? arr.filter((o) => o.numeroOC && o.entidadNombre && Number(o.monto) > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function crearNegocio(
   _prev: ActionState,
   fd: FormData,
@@ -155,8 +175,9 @@ export async function crearNegocio(
   const parsed = negocioSchema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { error: parsed.error.errors[0]?.message };
   const d = parsed.data;
+  const ocsNuevas = parseOcs(fd);
   try {
-    await prisma.negocio.create({
+    const negocio = await prisma.negocio.create({
       data: {
         idAlumno: d.idAlumno,
         codPrograma: d.codPrograma,
@@ -167,11 +188,25 @@ export async function crearNegocio(
         estadoNegocio: d.estadoNegocio,
       },
     });
+    for (const oc of ocsNuevas) {
+      await prisma.ordenCompra.create({
+        data: {
+          recordId: negocio.recordId,
+          tipoOC: oc.tipoOC,
+          numeroOC: oc.numeroOC,
+          entidadNombre: oc.entidadNombre,
+          entidadRut: oc.entidadRut || null,
+          monto: Number(oc.monto),
+          estadoOC: oc.estadoOC,
+        },
+      });
+    }
   } catch {
     return { error: "No se pudo crear el negocio" };
   }
   revalidatePath("/negocios");
   revalidatePath("/cobranza");
+  revalidatePath("/pre-cobranza");
   revalidatePath("/");
   return { ok: true };
 }
@@ -186,6 +221,7 @@ export async function actualizarNegocio(
   const d = parsed.data;
   const recordId = String(fd.get("recordId") ?? "");
   if (!recordId) return { error: "RecordID inválido" };
+  const ocsNuevas = parseOcs(fd);
   try {
     await prisma.negocio.update({
       where: { recordId },
@@ -199,6 +235,19 @@ export async function actualizarNegocio(
         estadoNegocio: d.estadoNegocio,
       },
     });
+    for (const oc of ocsNuevas) {
+      await prisma.ordenCompra.create({
+        data: {
+          recordId,
+          tipoOC: oc.tipoOC,
+          numeroOC: oc.numeroOC,
+          entidadNombre: oc.entidadNombre,
+          entidadRut: oc.entidadRut || null,
+          monto: Number(oc.monto),
+          estadoOC: oc.estadoOC,
+        },
+      });
+    }
   } catch {
     return { error: "No se pudo actualizar el negocio" };
   }
