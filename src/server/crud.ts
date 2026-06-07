@@ -176,6 +176,39 @@ export async function crearNegocio(
   return { ok: true };
 }
 
+export async function actualizarNegocio(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
+  await requireGestion();
+  const parsed = negocioSchema.safeParse(Object.fromEntries(fd));
+  if (!parsed.success) return { error: parsed.error.errors[0]?.message };
+  const d = parsed.data;
+  const recordId = String(fd.get("recordId") ?? "");
+  if (!recordId) return { error: "RecordID inválido" };
+  try {
+    await prisma.negocio.update({
+      where: { recordId },
+      data: {
+        idAlumno: d.idAlumno,
+        codPrograma: d.codPrograma,
+        montoNegocio: d.montoNegocio,
+        tipoNegocio: d.tipoNegocio,
+        tipoVenta: d.tipoVenta,
+        tipoDocto: d.tipoDocto,
+        estadoNegocio: d.estadoNegocio,
+      },
+    });
+  } catch {
+    return { error: "No se pudo actualizar el negocio" };
+  }
+  revalidatePath("/negocios");
+  revalidatePath("/cobranza");
+  revalidatePath("/pre-cobranza");
+  revalidatePath("/");
+  return { ok: true };
+}
+
 export async function actualizarEstadoNegocio(fd: FormData): Promise<void> {
   await requireGestion();
   const estado = String(fd.get("estadoNegocio")) as "MATRICULADO" | "DE_BAJA" | "DESISTE";

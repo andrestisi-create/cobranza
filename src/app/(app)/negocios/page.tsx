@@ -22,6 +22,7 @@ export default async function NegociosPage() {
 
   const rows: NegocioRow[] = negocios.map((n) => ({
     recordId: n.recordId,
+    idAlumno: n.idAlumno,
     alumnoNombre: nombre(n.alumno),
     codPrograma: n.codPrograma,
     montoNegocio: toNumber(n.montoNegocio),
@@ -37,7 +38,7 @@ export default async function NegociosPage() {
       <PageHeader title="Negocios" description="Tabla madre de negocios. Crea nuevos y administra su estado." />
       <NegociosManager
         negocios={rows}
-        alumnos={alumnos.map((a) => ({ idAlumno: a.idAlumno, nombre: nombre(a) }))}
+        alumnos={alumnos.map((a) => ({ idAlumno: a.idAlumno, nombre: nombre(a), rut: a.rut ?? "" }))}
         programas={programas.map((p) => ({ codPrograma: p.codPrograma, descripcion: p.descripcion }))}
         puedeGestionar={puedeGestionar}
       />
