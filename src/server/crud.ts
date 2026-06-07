@@ -147,6 +147,48 @@ const negocioSchema = z.object({
   estadoNegocio: z.enum(["MATRICULADO", "DE_BAJA", "DESISTE"]),
 });
 
+// ----------------- Vendedores -----------------
+
+const vendedorSchema = z.object({
+  nombre: z.string().min(1, "Nombre requerido"),
+});
+
+export async function guardarVendedor(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
+  await requireGestion();
+  const parsed = vendedorSchema.safeParse(Object.fromEntries(fd));
+  if (!parsed.success) return { error: parsed.error.errors[0]?.message };
+
+  const data = {
+    nombre: String(fd.get("nombre")).trim(),
+    email: opt(fd.get("email")),
+    telefono: opt(fd.get("telefono")),
+    activo: fd.get("activo") !== "false",
+  };
+  const id = opt(fd.get("id"));
+  try {
+    if (id) await prisma.vendedor.update({ where: { id }, data });
+    else await prisma.vendedor.create({ data });
+  } catch {
+    return { error: "No se pudo guardar el vendedor" };
+  }
+  revalidatePath("/vendedores");
+  revalidatePath("/negocios");
+  return { ok: true };
+}
+
+export async function eliminarVendedor(fd: FormData): Promise<void> {
+  await requireGestion();
+  try {
+    await prisma.vendedor.delete({ where: { id: String(fd.get("id")) } });
+  } catch {
+    /* tiene negocios asociados */
+  }
+  revalidatePath("/vendedores");
+}
+
 interface OcInput {
   tipoOC: "OTIC" | "OTEC" | "EMPRESA";
   numeroOC: string;
@@ -177,6 +219,7 @@ export async function crearNegocio(
   const d = parsed.data;
   const ocsNuevas = parseOcs(fd);
   try {
+    const idVendedor = opt(fd.get("idVendedor"));
     const negocio = await prisma.negocio.create({
       data: {
         idAlumno: d.idAlumno,
@@ -186,6 +229,7 @@ export async function crearNegocio(
         tipoVenta: d.tipoVenta,
         tipoDocto: d.tipoDocto,
         estadoNegocio: d.estadoNegocio,
+        idVendedor,
       },
     });
     for (const oc of ocsNuevas) {
@@ -223,6 +267,7 @@ export async function actualizarNegocio(
   if (!recordId) return { error: "RecordID inválido" };
   const ocsNuevas = parseOcs(fd);
   try {
+    const idVendedor = opt(fd.get("idVendedor"));
     await prisma.negocio.update({
       where: { recordId },
       data: {
@@ -233,6 +278,7 @@ export async function actualizarNegocio(
         tipoVenta: d.tipoVenta,
         tipoDocto: d.tipoDocto,
         estadoNegocio: d.estadoNegocio,
+        idVendedor,
       },
     });
     for (const oc of ocsNuevas) {

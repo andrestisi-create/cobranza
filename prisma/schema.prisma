@@ -109,11 +109,25 @@ model Programa {
   @@map("programas")
 }
 
+model Vendedor {
+  id        String    @id @default(cuid())
+  nombre    String
+  email     String?
+  telefono  String?
+  activo    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  negocios Negocio[]
+
+  @@map("vendedores")
+}
+
 /// Tabla madre del negocio. El pago se asocia a este RecordID, no a la factura.
 model Negocio {
   recordId      String        @id @default(cuid())
   idAlumno      String
   codPrograma   String
+  idVendedor    String?
   fechaCreacion DateTime      @default(now())
   estadoNegocio EstadoNegocio @default(MATRICULADO)
   montoNegocio  Decimal       @db.Decimal(14, 0)
@@ -123,8 +137,9 @@ model Negocio {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  alumno   Alumno   @relation(fields: [idAlumno], references: [idAlumno])
-  programa Programa @relation(fields: [codPrograma], references: [codPrograma])
+  alumno   Alumno    @relation(fields: [idAlumno], references: [idAlumno])
+  programa Programa  @relation(fields: [codPrograma], references: [codPrograma])
+  vendedor Vendedor? @relation(fields: [idVendedor], references: [id])
 
   pagos         Pago[]
   ordenesCompra OrdenCompra[]

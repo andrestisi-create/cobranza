@@ -41,6 +41,8 @@ export interface NegocioRow {
   estadoNegocio: string;
   fechaCreacion: string;
   ordenes: OcRow[];
+  idVendedor: string | null;
+  vendedorNombre: string | null;
 }
 
 interface OcPendiente {
@@ -317,11 +319,13 @@ function FormNegocio({
   editing,
   opcionesAlumno,
   opcionesPrograma,
+  opcionesVendedor,
   onCancel,
 }: {
   editing: NegocioRow | null;
   opcionesAlumno: OpcionCombobox[];
   opcionesPrograma: OpcionCombobox[];
+  opcionesVendedor: OpcionCombobox[];
   onCancel: () => void;
 }) {
   const esEdicion = editing !== null;
@@ -460,6 +464,16 @@ function FormNegocio({
             <option value="DESISTE">Desiste</option>
           </select>
         </div>
+
+        <div className="col-span-2 md:col-span-1">
+          <label className={labelCls}>Vendedor (opcional)</label>
+          <Combobox
+            name="idVendedor"
+            opciones={opcionesVendedor}
+            valorDefecto={editing?.idVendedor ?? undefined}
+            placeholder="Sin vendedor asignado…"
+          />
+        </div>
       </div>
 
       {/* Sección OC */}
@@ -506,11 +520,13 @@ export function NegociosManager({
   negocios,
   alumnos,
   programas,
+  vendedores,
   puedeGestionar,
 }: {
   negocios: NegocioRow[];
   alumnos: { idAlumno: string; nombre: string; rut: string }[];
   programas: { codPrograma: string; descripcion: string }[];
+  vendedores: { id: string; nombre: string }[];
   puedeGestionar: boolean;
 }) {
   // Almacena sólo el recordId (o "nuevo") — se deriva la fila viva desde `negocios`
@@ -533,6 +549,11 @@ export function NegociosManager({
     valor: p.codPrograma,
     etiqueta: p.codPrograma,
     subEtiqueta: p.descripcion,
+  }));
+
+  const opcionesVendedor: OpcionCombobox[] = vendedores.map((v) => ({
+    valor: v.id,
+    etiqueta: v.nombre,
   }));
 
   return (
@@ -563,6 +584,7 @@ export function NegociosManager({
               editing={editingRow}
               opcionesAlumno={opcionesAlumno}
               opcionesPrograma={opcionesPrograma}
+              opcionesVendedor={opcionesVendedor}
               onCancel={() => setModoId(null)}
             />
           )}
@@ -582,6 +604,7 @@ export function NegociosManager({
               <th className="px-3 py-2 text-left">Docto</th>
               <th className="px-3 py-2 text-right">Monto</th>
               <th className="px-3 py-2 text-center">OC</th>
+              <th className="px-3 py-2 text-left">Vendedor</th>
               <th className="px-3 py-2 text-left">Estado</th>
               {puedeGestionar && <th className="px-3 py-2"></th>}
             </tr>
@@ -629,6 +652,9 @@ export function NegociosManager({
                     ) : (
                       <span className="text-slate-300">—</span>
                     )}
+                  </td>
+                  <td className="px-3 py-2 text-slate-500 text-xs">
+                    {n.vendedorNombre ?? <span className="text-slate-300">—</span>}
                   </td>
                   <td className="px-3 py-2">
                     {puedeGestionar ? (

@@ -21,16 +21,18 @@ export default async function NegociosPage() {
   const session = await auth();
   const puedeGestionar = session?.user?.rol !== "COBRADOR";
 
-  const [negocios, alumnos, programas] = await Promise.all([
+  const [negocios, alumnos, programas, vendedores] = await Promise.all([
     prisma.negocio.findMany({
       orderBy: { fechaCreacion: "desc" },
       include: {
         alumno: true,
+        vendedor: true,
         ordenesCompra: { orderBy: { createdAt: "asc" } },
       },
     }),
     prisma.alumno.findMany({ orderBy: { apellidoPaterno: "asc" } }),
     prisma.programa.findMany({ orderBy: { codPrograma: "asc" } }),
+    prisma.vendedor.findMany({ where: { activo: true }, orderBy: { nombre: "asc" } }),
   ]);
 
   const rows: NegocioRow[] = negocios.map((n) => ({
@@ -53,6 +55,8 @@ export default async function NegociosPage() {
       monto: toNumber(oc.monto),
       estadoOC: oc.estadoOC,
     })),
+    idVendedor: n.idVendedor,
+    vendedorNombre: n.vendedor?.nombre ?? null,
   }));
 
   return (
@@ -72,6 +76,7 @@ export default async function NegociosPage() {
           codPrograma: p.codPrograma,
           descripcion: p.descripcion,
         }))}
+        vendedores={vendedores.map((v) => ({ id: v.id, nombre: v.nombre }))}
         puedeGestionar={puedeGestionar}
       />
     </div>

@@ -166,7 +166,15 @@ export function CobranzaTable({
               </tr>
             )}
             {filtrados.map((n) => (
-              <tr key={n.recordId} className="border-b border-slate-100 hover:bg-slate-50">
+              <tr
+                key={n.recordId}
+                className={cn(
+                  "border-b hover:bg-slate-50",
+                  n.ocDescubierta
+                    ? "border-red-200 bg-red-50 hover:bg-red-100"
+                    : "border-slate-100",
+                )}
+              >
                 <td className="px-3 py-2 text-slate-500">{formatFecha(n.fechaCreacion)}</td>
                 <td className="px-3 py-2">
                   <div className="font-medium text-slate-900">{n.alumno.nombreCompleto}</div>

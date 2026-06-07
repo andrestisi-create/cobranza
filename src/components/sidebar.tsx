@@ -13,6 +13,7 @@ const NAV: NavItem[] = [
   { href: "/cobranza", label: "Cobranza" },
   { href: "/alumnos", label: "Alumnos" },
   { href: "/programas", label: "Programas" },
+  { href: "/vendedores", label: "Vendedores" },
   { href: "/usuarios", label: "Usuarios", soloAdmin: true },
 ];
 

@@ -144,6 +144,7 @@ export function PanelNegocio({
             <Dato label="Dirección" value={n.alumno.direccion} />
           </div>
           <Dato label="Programa" value={`${n.codPrograma} · ${n.programaDescripcion}`} />
+          <Dato label="Vendedor" value={n.vendedorNombre} />
           <Dato label="Creado" value={formatFecha(n.fechaCreacion)} />
         </dl>
       </Seccion>
@@ -215,9 +216,21 @@ export function PanelNegocio({
       {/* Órdenes de compra */}
       {(
         <Seccion titulo={`Órdenes de compra (${n.ordenes.length})`}>
-          <div className="mb-2 flex items-center justify-between rounded-lg bg-indigo-50 px-3 py-2 text-xs">
-            <span className="text-indigo-700">Total comprometido en OC</span>
-            <span className="font-bold text-indigo-900">{formatCLP(n.totalOC)}</span>
+          {/* Alerta OC descubierta */}
+          {n.ocDescubierta && (
+            <div className="mb-2 flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <span>
+                <strong>OC insuficiente:</strong> las órdenes de compra ({formatCLP(n.totalOC)}) no cubren el monto del negocio ({formatCLP(n.montoNegocio)}).
+                Faltan {formatCLP(n.montoNegocio - n.totalOC)}.
+              </span>
+            </div>
+          )}
+          <div className={`mb-2 flex items-center justify-between rounded-lg px-3 py-2 text-xs ${n.ocDescubierta ? "bg-red-100" : "bg-indigo-50"}`}>
+            <span className={n.ocDescubierta ? "text-red-700" : "text-indigo-700"}>Total comprometido en OC</span>
+            <span className={`font-bold ${n.ocDescubierta ? "text-red-900" : "text-indigo-900"}`}>{formatCLP(n.totalOC)}</span>
           </div>
           <div className="mb-3 space-y-2">
             {n.ordenes.length === 0 && (

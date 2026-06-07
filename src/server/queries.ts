@@ -54,9 +54,12 @@ export interface NegocioCobranza {
   estadoCobranza: EstadoCobranza;
   tieneDocumento: boolean;
   esSence: boolean;
+  /** true cuando tipoDocto=ORDEN_COMPRA y totalOC < montoNegocio */
+  ocDescubierta: boolean;
   alumno: AlumnoView;
   codPrograma: string;
   programaDescripcion: string;
+  vendedorNombre: string | null;
   pagos: PagoView[];
   ordenes: OCView[];
   documentos: DocView[];
@@ -81,6 +84,7 @@ export async function getNegociosCobranza(): Promise<NegocioCobranza[]> {
     include: {
       alumno: true,
       programa: true,
+      vendedor: true,
       pagos: { orderBy: { fechaPago: "desc" } },
       ordenesCompra: { orderBy: { createdAt: "asc" } },
       documentos: { orderBy: { createdAt: "desc" } },
@@ -90,6 +94,7 @@ export async function getNegociosCobranza(): Promise<NegocioCobranza[]> {
   return negocios.map((n) => {
     const resumen = resumenCobranza(n.montoNegocio, n.pagos);
     const totalOC = n.ordenesCompra.reduce((acc, oc) => acc + toNumber(oc.monto), 0);
+    const ocDescubierta = n.tipoDocto === "ORDEN_COMPRA" && totalOC < resumen.montoNegocio;
 
     return {
       recordId: n.recordId,
@@ -105,8 +110,10 @@ export async function getNegociosCobranza(): Promise<NegocioCobranza[]> {
       estadoCobranza: resumen.estadoCobranza,
       tieneDocumento: n.documentos.length > 0,
       esSence: n.tipoVenta === "SENCE",
+      ocDescubierta,
       codPrograma: n.codPrograma,
       programaDescripcion: n.programa.descripcion,
+      vendedorNombre: n.vendedor?.nombre ?? null,
       alumno: {
         idAlumno: n.alumno.idAlumno,
         nombreCompleto: nombreCompleto(n.alumno),
