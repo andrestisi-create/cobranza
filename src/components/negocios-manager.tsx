@@ -631,6 +631,7 @@ export function NegociosManager({
         <table className="w-full text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
+              <th className="px-3 py-2 text-left">Record ID</th>
               <th className="px-3 py-2 text-left">Fecha</th>
               <th className="px-3 py-2 text-left">Alumno</th>
               <th className="px-3 py-2 text-left">Programa</th>
@@ -658,6 +659,9 @@ export function NegociosManager({
                       : "border-b border-slate-100 hover:bg-slate-50"
                   }
                 >
+                  <td className="px-3 py-2 font-mono text-xs text-slate-500">
+                    {n.recordId}
+                  </td>
                   <td className="px-3 py-2 text-slate-500">
                     {formatFecha(n.fechaCreacion)}
                   </td>
