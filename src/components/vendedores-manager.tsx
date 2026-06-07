@@ -2,7 +2,22 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { guardarVendedor, eliminarVendedor } from "@/server/crud";
+import { importarVendedores } from "@/server/imports";
+import { ImportCSV, type ColConfig } from "@/components/import-csv";
 import type { ActionState } from "@/lib/types";
+
+const COLUMNAS_VENDEDORES: ColConfig[] = [
+  { campo: "nombre",   label: "Nombre",    requerido: true },
+  { campo: "email",    label: "Email",     requerido: false },
+  { campo: "telefono", label: "Teléfono",  requerido: false },
+  {
+    campo: "activo",
+    label: "Activo",
+    requerido: false,
+    valoresPermitidos: ["true", "false"],
+    descripcion: "Vacío o 'true' = activo; 'false' = inactivo",
+  },
+];
 
 export interface VendedorRow {
   id: string;
@@ -59,6 +74,14 @@ export function VendedoresManager({
               >
                 + Nuevo vendedor
               </button>
+            )}
+            {!abierto && (
+              <ImportCSV
+                titulo="Importar vendedores desde CSV"
+                ejemploUrl="/ejemplos/vendedores_ejemplo.csv"
+                columnas={COLUMNAS_VENDEDORES}
+                action={importarVendedores}
+              />
             )}
           </div>
 

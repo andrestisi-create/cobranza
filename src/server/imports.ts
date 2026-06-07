@@ -218,3 +218,61 @@ export async function importarNegocios(
 
   return { ok: true, resultado: { creados, errores } };
 }
+
+// ─────────────────────────────────────────────
+// Importar vendedores
+// ─────────────────────────────────────────────
+
+export async function importarVendedores(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
+  await requireGestion();
+
+  const raw = fd.get("json");
+  if (!raw) return { error: "No se recibieron datos" };
+
+  let rows: Record<string, string>[];
+  try {
+    rows = JSON.parse(String(raw));
+  } catch {
+    return { error: "Datos inválidos" };
+  }
+
+  let creados = 0;
+  const errores: { fila: number; mensaje: string }[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const fila = i + 2;
+    const nombre = r.nombre?.trim();
+    if (!nombre) {
+      errores.push({ fila, mensaje: "El campo nombre es obligatorio" });
+      continue;
+    }
+    try {
+      const activo = r.activo?.trim().toLowerCase();
+      await prisma.vendedor.create({
+        data: {
+          nombre,
+          email: r.email?.trim() || null,
+          telefono: r.telefono?.trim() || null,
+          activo:
+            activo === "false" || activo === "no" || activo === "0"
+              ? false
+              : true,
+        },
+      });
+      creados++;
+    } catch {
+      errores.push({ fila, mensaje: "No se pudo crear el vendedor" });
+    }
+  }
+
+  if (creados > 0) {
+    revalidatePath("/vendedores");
+    revalidatePath("/negocios");
+  }
+
+  return { ok: true, resultado: { creados, errores } };
+}

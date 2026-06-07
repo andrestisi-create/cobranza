@@ -1,0 +1,6 @@
+nombre,email,telefono,activo
+Carolina Muñoz,carolina.munoz@empresa.cl,+56912345678,true
+Ricardo Soto,ricardo.soto@empresa.cl,+56987654321,true
+Valeria Fuentes,,+56945678901,true
+Jorge Herrera,jorge.herrera@empresa.cl,,true
+Claudia Reyes,claudia.reyes@empresa.cl,+56934567890,false
