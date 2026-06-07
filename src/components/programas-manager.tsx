@@ -2,8 +2,18 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { guardarPrograma, eliminarPrograma } from "@/server/crud";
+import { importarProgramas } from "@/server/imports";
+import { ImportCSV, type ColConfig } from "@/components/import-csv";
 import type { ActionState } from "@/lib/types";
 import { formatCLP, formatFecha } from "@/lib/format";
+
+const COLUMNAS_PROGRAMAS: ColConfig[] = [
+  { campo: "codPrograma",  label: "Código",       requerido: true,  descripcion: "Único, ej: PROG-2025" },
+  { campo: "descripcion",  label: "Descripción",  requerido: true },
+  { campo: "fechaInicio",  label: "Fecha inicio", requerido: true,  tipo: "fecha" },
+  { campo: "fechaFin",     label: "Fecha fin",    requerido: true,  tipo: "fecha" },
+  { campo: "valor",        label: "Valor (CLP)",  requerido: false, tipo: "numero", descripcion: "Entero sin decimales. Dejar vacío si no aplica" },
+];
 
 export interface ProgramaRow {
   codPrograma: string;
@@ -42,18 +52,29 @@ export function ProgramasManager({
   return (
     <div>
       {puedeGestionar && (
-        <div className="mb-4">
-          {!abierto ? (
-            <button
-              onClick={() => {
-                setEditing(null);
-                setAbierto(true);
-              }}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-            >
-              + Nuevo programa
-            </button>
-          ) : (
+        <div className="mb-4 space-y-3">
+          {/* Acciones superiores */}
+          <div className="flex flex-wrap items-center gap-2">
+            {!abierto && (
+              <button
+                onClick={() => { setEditing(null); setAbierto(true); }}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+              >
+                + Nuevo programa
+              </button>
+            )}
+            {!abierto && (
+              <ImportCSV
+                titulo="Importar programas desde CSV"
+                ejemploUrl="/ejemplos/programas_ejemplo.csv"
+                columnas={COLUMNAS_PROGRAMAS}
+                action={importarProgramas}
+              />
+            )}
+          </div>
+
+          {/* Formulario de nuevo/editar programa */}
+          {abierto && (
             <form
               key={editing?.codPrograma ?? "new"}
               action={formAction}

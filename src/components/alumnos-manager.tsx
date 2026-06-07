@@ -2,7 +2,21 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { guardarAlumno, eliminarAlumno } from "@/server/crud";
+import { importarAlumnos } from "@/server/imports";
+import { ImportCSV, type ColConfig } from "@/components/import-csv";
 import type { ActionState } from "@/lib/types";
+
+const COLUMNAS_ALUMNOS: ColConfig[] = [
+  { campo: "nombre",          label: "Nombre",           requerido: true },
+  { campo: "apellidoPaterno", label: "Apellido paterno", requerido: true },
+  { campo: "segundoNombre",   label: "Segundo nombre",   requerido: false },
+  { campo: "apellidoMaterno", label: "Apellido materno", requerido: false },
+  { campo: "rut",             label: "RUT",              requerido: false, descripcion: "Ej: 12.345.678-9 (debe ser único)" },
+  { campo: "email",           label: "Email",            requerido: false },
+  { campo: "telefono",        label: "Teléfono",         requerido: false },
+  { campo: "direccion",       label: "Dirección",        requerido: false },
+  { campo: "fechaNacimiento", label: "Fecha nacimiento", requerido: false, tipo: "fecha" },
+];
 
 export interface AlumnoRow {
   idAlumno: string;
@@ -55,15 +69,29 @@ export function AlumnosManager({
   return (
     <div>
       {puedeGestionar && (
-        <div className="mb-4">
-          {!abierto ? (
-            <button
-              onClick={nuevo}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-            >
-              + Nuevo alumno
-            </button>
-          ) : (
+        <div className="mb-4 space-y-3">
+          {/* Acciones superiores */}
+          <div className="flex flex-wrap items-center gap-2">
+            {!abierto && (
+              <button
+                onClick={nuevo}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+              >
+                + Nuevo alumno
+              </button>
+            )}
+            {!abierto && (
+              <ImportCSV
+                titulo="Importar alumnos desde CSV"
+                ejemploUrl="/ejemplos/alumnos_ejemplo.csv"
+                columnas={COLUMNAS_ALUMNOS}
+                action={importarAlumnos}
+              />
+            )}
+          </div>
+
+          {/* Formulario de nuevo alumno */}
+          {abierto && (
             <form
               key={editing?.idAlumno ?? "new"}
               action={formAction}

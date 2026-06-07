@@ -2,9 +2,42 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { crearNegocio, actualizarEstadoNegocio, eliminarNegocio } from "@/server/crud";
+import { importarNegocios } from "@/server/imports";
+import { ImportCSV, type ColConfig } from "@/components/import-csv";
 import type { ActionState } from "@/lib/types";
 import { formatCLP, formatFecha, etiqueta } from "@/lib/format";
 import { TipoVentaBadge } from "@/components/badges";
+
+const COLUMNAS_NEGOCIOS: ColConfig[] = [
+  {
+    campo: "rutAlumno",    label: "RUT del alumno",   requerido: true,
+    descripcion: "El alumno debe existir en el sistema con ese RUT",
+  },
+  {
+    campo: "codPrograma",  label: "Código programa",  requerido: true,
+    descripcion: "El programa debe existir en el sistema",
+  },
+  {
+    campo: "montoNegocio", label: "Monto (CLP)",      requerido: true,  tipo: "numero",
+  },
+  {
+    campo: "tipoNegocio",  label: "Tipo negocio",     requerido: true,
+    valoresPermitidos: ["CORPORATIVO", "RETAIL"],
+  },
+  {
+    campo: "tipoVenta",    label: "Tipo venta",       requerido: true,
+    valoresPermitidos: ["SENCE", "NO_SENCE"],
+  },
+  {
+    campo: "tipoDocto",    label: "Tipo documento",   requerido: true,
+    valoresPermitidos: ["FACTURA", "BOLETA", "ORDEN_COMPRA"],
+  },
+  {
+    campo: "estadoNegocio", label: "Estado",          requerido: false,
+    valoresPermitidos: ["MATRICULADO", "DE_BAJA", "DESISTE"],
+    descripcion: "Vacío = MATRICULADO",
+  },
+];
 
 export interface NegocioRow {
   recordId: string;
@@ -46,15 +79,29 @@ export function NegociosManager({
   return (
     <div>
       {puedeGestionar && (
-        <div className="mb-4">
-          {!abierto ? (
-            <button
-              onClick={() => setAbierto(true)}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-            >
-              + Nuevo negocio
-            </button>
-          ) : (
+        <div className="mb-4 space-y-3">
+          {/* Acciones superiores */}
+          <div className="flex flex-wrap items-center gap-2">
+            {!abierto && (
+              <button
+                onClick={() => setAbierto(true)}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+              >
+                + Nuevo negocio
+              </button>
+            )}
+            {!abierto && (
+              <ImportCSV
+                titulo="Importar negocios desde CSV"
+                ejemploUrl="/ejemplos/negocios_ejemplo.csv"
+                columnas={COLUMNAS_NEGOCIOS}
+                action={importarNegocios}
+              />
+            )}
+          </div>
+
+          {/* Formulario de nuevo negocio */}
+          {abierto && (
             <form key="new" action={formAction} className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                 <div className="col-span-2 md:col-span-1">

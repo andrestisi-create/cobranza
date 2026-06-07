@@ -1,0 +1,6 @@
+nombre,apellidoPaterno,segundoNombre,apellidoMaterno,rut,email,telefono,direccion,fechaNacimiento
+Juan,González,Carlos,Pérez,12.345.678-9,juan.gonzalez@email.cl,+56912345678,Av. Providencia 123 Santiago,1985-06-15
+María,Rodríguez,,Soto,9.876.543-2,maria.rodriguez@email.cl,+56987654321,Calle Larga 456 Valparaíso,1992-03-22
+Pedro,Martínez,Andrés,,15.234.567-K,pedro.martinez@gmail.com,,Pasaje Las Rosas 78 Concepción,
+Ana,López,,Fuentes,7.654.321-1,ana.lopez@empresa.cl,+56945678901,Los Olivos 234 Santiago,1988-11-30
+Diego,Fernández,Luis,Morales,19.876.543-5,diego.fernandez@mail.com,+56934567890,,2001-07-08
