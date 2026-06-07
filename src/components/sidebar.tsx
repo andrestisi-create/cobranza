@@ -8,9 +8,9 @@ type NavItem = { href: string; label: string; soloAdmin?: boolean };
 
 const NAV: NavItem[] = [
   { href: "/", label: "Dashboard" },
-  { href: "/cobranza", label: "Cobranza" },
-  { href: "/pre-cobranza", label: "Pre-cobranza" },
   { href: "/negocios", label: "Negocios" },
+  { href: "/pre-cobranza", label: "Pre-cobranza" },
+  { href: "/cobranza", label: "Cobranza" },
   { href: "/alumnos", label: "Alumnos" },
   { href: "/programas", label: "Programas" },
   { href: "/usuarios", label: "Usuarios", soloAdmin: true },
