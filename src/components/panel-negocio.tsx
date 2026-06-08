@@ -200,9 +200,11 @@ export function PanelNegocio({
             <label className={labelCls}>Medio de pago</label>
             <select name="medioPago" className={inputCls} defaultValue="TRANSFERENCIA">
               <option value="TRANSFERENCIA">Transferencia</option>
+              <option value="WEBPAY">WebPay</option>
+              <option value="MERCADOPAGO_LINK">Mercado Pago - Link de Pago</option>
+              <option value="MERCADOPAGO_TARJETA">Mercado Pago - Tarjeta</option>
               <option value="CHEQUE">Cheque</option>
               <option value="EFECTIVO">Efectivo</option>
-              <option value="TARJETA">Tarjeta</option>
               <option value="OTRO">Otro</option>
             </select>
           </div>

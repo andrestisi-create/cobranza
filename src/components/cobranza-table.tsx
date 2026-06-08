@@ -22,7 +22,7 @@ const COLUMNAS_PAGOS: ColConfig[] = [
   { campo: "recordId",    label: "Record ID",           requerido: true,  tipo: "numero",  descripcion: "11 dígitos; el negocio debe existir en el sistema" },
   { campo: "montoPago",   label: "Monto pago (CLP)",    requerido: true,  tipo: "numero" },
   { campo: "fechaPago",   label: "Fecha pago",          requerido: false, tipo: "fecha",   descripcion: "YYYY-MM-DD. Vacío = fecha de hoy" },
-  { campo: "medioPago",   label: "Medio de pago",       requerido: false, valoresPermitidos: ["TRANSFERENCIA","CHEQUE","EFECTIVO","TARJETA","OTRO"], descripcion: "Vacío = TRANSFERENCIA" },
+  { campo: "medioPago",   label: "Medio de pago",       requerido: false, valoresPermitidos: ["TRANSFERENCIA","WEBPAY","MERCADOPAGO_LINK","MERCADOPAGO_TARJETA","CHEQUE","EFECTIVO","OTRO"], descripcion: "Vacío = TRANSFERENCIA" },
   { campo: "referencia",  label: "Referencia",          requerido: false, descripcion: "N° transferencia, cheque, etc." },
   { campo: "observacion", label: "Observación",         requerido: false },
   // ── Documento tributario opcional ──────────────────────────────────────────

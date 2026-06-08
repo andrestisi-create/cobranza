@@ -325,11 +325,10 @@ export async function importarPagos(
       }
 
       const medioRaw = r.medioPago?.trim().toUpperCase();
+      const MEDIOS_VALIDOS = ["TRANSFERENCIA", "WEBPAY", "MERCADOPAGO_LINK", "MERCADOPAGO_TARJETA", "CHEQUE", "EFECTIVO", "OTRO"];
       const medioPago = (
-        ["CHEQUE", "EFECTIVO", "TARJETA", "OTRO"].includes(medioRaw)
-          ? medioRaw
-          : "TRANSFERENCIA"
-      ) as "TRANSFERENCIA" | "CHEQUE" | "EFECTIVO" | "TARJETA" | "OTRO";
+        MEDIOS_VALIDOS.includes(medioRaw) ? medioRaw : "TRANSFERENCIA"
+      ) as "TRANSFERENCIA" | "WEBPAY" | "MERCADOPAGO_LINK" | "MERCADOPAGO_TARJETA" | "CHEQUE" | "EFECTIVO" | "OTRO";
 
       await prisma.pago.create({
         data: {

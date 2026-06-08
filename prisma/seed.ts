@@ -104,7 +104,7 @@ async function main() {
     tipoVenta: "SENCE" | "NO_SENCE";
     tipoDocto: "FACTURA" | "BOLETA" | "ORDEN_COMPRA";
     estadoNegocio: "MATRICULADO" | "DE_BAJA" | "DESISTE";
-    pagos: { monto: number; medio: "TRANSFERENCIA" | "CHEQUE" | "EFECTIVO" | "TARJETA" | "OTRO" }[];
+    pagos: { monto: number; medio: "TRANSFERENCIA" | "WEBPAY" | "MERCADOPAGO_LINK" | "MERCADOPAGO_TARJETA" | "CHEQUE" | "EFECTIVO" | "OTRO" }[];
     ocs?: { tipo: "OTIC" | "OTEC" | "EMPRESA"; numero: string; entidad: string; monto: number; estado?: "PENDIENTE" | "FACTURADA" | "PAGADA" | "ANULADA" }[];
     conDocumento?: boolean;
   };
@@ -125,7 +125,7 @@ async function main() {
       recordId: "60178145391",
       alumnoIdx: 1, codPrograma: codProg[1], monto: 450000,
       tipoNegocio: "RETAIL", tipoVenta: "NO_SENCE", tipoDocto: "BOLETA", estadoNegocio: "MATRICULADO",
-      pagos: [{ monto: 450000, medio: "TARJETA" }],
+      pagos: [{ monto: 450000, medio: "WEBPAY" }],
       conDocumento: true,
     },
     {
@@ -222,7 +222,7 @@ async function main() {
       recordId: "60178145402",
       alumnoIdx: 5, codPrograma: codProg[1], monto: 450000,
       tipoNegocio: "RETAIL", tipoVenta: "NO_SENCE", tipoDocto: "BOLETA", estadoNegocio: "MATRICULADO",
-      pagos: [{ monto: 225000, medio: "TARJETA" }],
+      pagos: [{ monto: 225000, medio: "WEBPAY" }],
       conDocumento: false,
     },
     {

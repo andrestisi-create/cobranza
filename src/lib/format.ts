@@ -63,9 +63,12 @@ const ETIQUETAS: Record<string, string> = {
   ANULADA: "Anulada",
   // MedioPago
   TRANSFERENCIA: "Transferencia",
+  WEBPAY: "WebPay",
+  MERCADOPAGO_LINK: "Mercado Pago - Link de Pago",
+  MERCADOPAGO_TARJETA: "Mercado Pago - Tarjeta",
   CHEQUE: "Cheque",
   EFECTIVO: "Efectivo",
-  TARJETA: "Tarjeta",
+  TARJETA: "Tarjeta (legado)",
   OTRO: "Otro",
   // Roles
   ADMIN: "Administrador",

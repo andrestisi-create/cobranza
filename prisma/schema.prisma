@@ -56,9 +56,12 @@ enum EstadoOC {
 
 enum MedioPago {
   TRANSFERENCIA
+  WEBPAY
+  MERCADOPAGO_LINK
+  MERCADOPAGO_TARJETA
   CHEQUE
   EFECTIVO
-  TARJETA
+  TARJETA   // legado — no mostrar en UI nuevos
   OTRO
 }
 
