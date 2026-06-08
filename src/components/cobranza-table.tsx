@@ -11,6 +11,26 @@ import {
 } from "@/components/badges";
 import { Drawer } from "@/components/drawer";
 import { PanelNegocio } from "@/components/panel-negocio";
+import { ImportCSV, type ColConfig } from "@/components/import-csv";
+import { importarPagos } from "@/server/imports";
+
+// ─────────────────────────────────────────────
+// Config importación CSV de pagos
+// ─────────────────────────────────────────────
+
+const COLUMNAS_PAGOS: ColConfig[] = [
+  { campo: "recordId",    label: "Record ID",           requerido: true,  tipo: "numero",  descripcion: "11 dígitos; el negocio debe existir en el sistema" },
+  { campo: "montoPago",   label: "Monto pago (CLP)",    requerido: true,  tipo: "numero" },
+  { campo: "fechaPago",   label: "Fecha pago",          requerido: false, tipo: "fecha",   descripcion: "YYYY-MM-DD. Vacío = fecha de hoy" },
+  { campo: "medioPago",   label: "Medio de pago",       requerido: false, valoresPermitidos: ["TRANSFERENCIA","CHEQUE","EFECTIVO","TARJETA","OTRO"], descripcion: "Vacío = TRANSFERENCIA" },
+  { campo: "referencia",  label: "Referencia",          requerido: false, descripcion: "N° transferencia, cheque, etc." },
+  { campo: "observacion", label: "Observación",         requerido: false },
+  // ── Documento tributario opcional ──────────────────────────────────────────
+  { campo: "tipoDocto",   label: "Tipo documento",      requerido: false, valoresPermitidos: ["FACTURA","BOLETA","ORDEN_COMPRA"], descripcion: "Si se indica, se registra el documento asociado al negocio" },
+  { campo: "folioDocto",  label: "Folio documento",     requerido: false, descripcion: "N° boleta, factura o folio de OC" },
+  { campo: "fechaDocto",  label: "Fecha emisión doc.",  requerido: false, tipo: "fecha",   descripcion: "Vacío = sin fecha registrada" },
+  { campo: "montoDocto",  label: "Monto documento",     requerido: false, tipo: "numero",  descripcion: "Vacío = mismo monto que el pago" },
+];
 
 type SortKey = "fecha" | "alumno" | "monto" | "pagado" | "saldo";
 
@@ -125,10 +145,12 @@ function FiltroCobranza({
 export function CobranzaTable({
   negocios,
   puedeEliminar,
+  puedeGestionar = false,
   soloPendientes = false,
 }: {
   negocios: NegocioCobranza[];
   puedeEliminar: boolean;
+  puedeGestionar?: boolean;
   soloPendientes?: boolean;
 }) {
   const [q, setQ] = useState("");
@@ -226,6 +248,18 @@ export function CobranzaTable({
 
   return (
     <div>
+      {/* ── Importar pagos masivos ── */}
+      {puedeGestionar && (
+        <div className="mb-4 flex justify-end">
+          <ImportCSV
+            titulo="Importar pagos masivos"
+            ejemploUrl="/ejemplos/pagos_ejemplo.csv"
+            columnas={COLUMNAS_PAGOS}
+            action={importarPagos}
+          />
+        </div>
+      )}
+
       {/* ── Totalizadores ── */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center">

@@ -276,6 +276,115 @@ export async function importarNegocios(
 }
 
 // ─────────────────────────────────────────────
+// Importar pagos masivos (+ documento opcional)
+// ─────────────────────────────────────────────
+
+export async function importarPagos(
+  _prev: ActionState,
+  fd: FormData,
+): Promise<ActionState> {
+  await requireGestion();
+
+  const raw = fd.get("json");
+  if (!raw) return { error: "No se recibieron datos" };
+
+  let rows: Record<string, string>[];
+  try {
+    rows = JSON.parse(String(raw));
+  } catch {
+    return { error: "Datos inválidos" };
+  }
+
+  let creados = 0;
+  const errores: { fila: number; mensaje: string }[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const fila = i + 2;
+    try {
+      const recordId = r.recordId?.trim();
+      if (!recordId) {
+        errores.push({ fila, mensaje: "Record ID requerido" });
+        continue;
+      }
+
+      // Verificar que el negocio existe
+      const negocio = await prisma.negocio.findUnique({ where: { recordId } });
+      if (!negocio) {
+        errores.push({
+          fila,
+          mensaje: `Negocio con Record ID "${recordId}" no encontrado`,
+        });
+        continue;
+      }
+
+      const monto = Number(r.montoPago?.trim());
+      if (!monto || monto <= 0) {
+        errores.push({ fila, mensaje: "Monto de pago inválido" });
+        continue;
+      }
+
+      const medioRaw = r.medioPago?.trim().toUpperCase();
+      const medioPago = (
+        ["CHEQUE", "EFECTIVO", "TARJETA", "OTRO"].includes(medioRaw)
+          ? medioRaw
+          : "TRANSFERENCIA"
+      ) as "TRANSFERENCIA" | "CHEQUE" | "EFECTIVO" | "TARJETA" | "OTRO";
+
+      await prisma.pago.create({
+        data: {
+          recordId,
+          montoPago: monto,
+          fechaPago: r.fechaPago?.trim()
+            ? new Date(r.fechaPago.trim())
+            : new Date(),
+          medioPago,
+          referencia: r.referencia?.trim() || null,
+          observacion: r.observacion?.trim() || null,
+        },
+      });
+
+      // Documento tributario opcional (boleta, factura, OC)
+      const tipoDoctoRaw = r.tipoDocto?.trim().toUpperCase();
+      if (
+        tipoDoctoRaw === "FACTURA" ||
+        tipoDoctoRaw === "BOLETA" ||
+        tipoDoctoRaw === "ORDEN_COMPRA"
+      ) {
+        await prisma.documentoTributario.create({
+          data: {
+            recordId,
+            tipoDocto: tipoDoctoRaw,
+            folio: r.folioDocto?.trim() || null,
+            fechaEmision: r.fechaDocto?.trim()
+              ? new Date(r.fechaDocto.trim())
+              : null,
+            monto: r.montoDocto?.trim()
+              ? Number(r.montoDocto.trim())
+              : monto,
+          },
+        });
+      }
+
+      creados++;
+    } catch {
+      errores.push({
+        fila,
+        mensaje: "No se pudo registrar el pago (verifique los datos)",
+      });
+    }
+  }
+
+  if (creados > 0) {
+    revalidatePath("/cobranza");
+    revalidatePath("/pre-cobranza");
+    revalidatePath("/");
+  }
+
+  return { ok: true, resultado: { creados, errores } };
+}
+
+// ─────────────────────────────────────────────
 // Importar vendedores
 // ─────────────────────────────────────────────
 
