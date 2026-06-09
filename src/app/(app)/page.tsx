@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { getMetricas } from "@/server/queries";
+import { getMetricas, getVentaAnual } from "@/server/queries";
 import { PageHeader } from "@/components/page-header";
 import { formatCLP } from "@/lib/format";
+import { GraficoVentaAnual } from "@/components/grafico-venta-anual";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ function Metrica({
 }
 
 export default async function DashboardPage() {
-  const m = await getMetricas();
+  const [m, ventaAnual] = await Promise.all([getMetricas(), getVentaAnual()]);
 
   return (
     <div className="p-6">
@@ -50,6 +51,8 @@ export default async function DashboardPage() {
           hint="Pendientes de documento tributario"
         />
       </div>
+
+      <GraficoVentaAnual datos={ventaAnual} />
 
       <div className="mt-6 flex flex-wrap gap-3">
         <Link

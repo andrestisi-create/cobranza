@@ -179,3 +179,57 @@ export async function getMetricas(): Promise<MetricasDashboard> {
     negociosPagados,
   };
 }
+
+// ─────────────────────────────────────────────
+// Venta mensual: año actual vs año anterior
+// ─────────────────────────────────────────────
+
+export interface VentaAnualComparativo {
+  anioActual: number;
+  anioPrevio: number;
+  porMes: { mes: number; actual: number; previo: number }[];
+  totalActual: number;
+  totalPrevio: number;
+}
+
+export async function getVentaAnual(): Promise<VentaAnualComparativo> {
+  const ahora = new Date();
+  const anioActual = ahora.getFullYear();
+  const anioPrevio = anioActual - 1;
+
+  const negocios = await prisma.negocio.findMany({
+    where: {
+      fechaCreacion: {
+        gte: new Date(`${anioPrevio}-01-01T00:00:00.000Z`),
+        lt: new Date(`${anioActual + 1}-01-01T00:00:00.000Z`),
+      },
+    },
+    select: {
+      fechaCreacion: true,
+      montoNegocio: true,
+    },
+  });
+
+  const mesActual = Array<number>(12).fill(0);
+  const mesPrevio = Array<number>(12).fill(0);
+
+  for (const n of negocios) {
+    const anio = n.fechaCreacion.getFullYear();
+    const mes = n.fechaCreacion.getMonth(); // 0-11
+    const monto = toNumber(n.montoNegocio);
+    if (anio === anioActual) mesActual[mes] += monto;
+    else if (anio === anioPrevio) mesPrevio[mes] += monto;
+  }
+
+  return {
+    anioActual,
+    anioPrevio,
+    porMes: Array.from({ length: 12 }, (_, i) => ({
+      mes: i + 1,
+      actual: mesActual[i],
+      previo: mesPrevio[i],
+    })),
+    totalActual: mesActual.reduce((a, b) => a + b, 0),
+    totalPrevio: mesPrevio.reduce((a, b) => a + b, 0),
+  };
+}
