@@ -12,17 +12,20 @@ interface Datos {
 
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
+const ALTURA_PX = 180; // debe coincidir con el height del contenedor padre
+
 function Barra({ valor, max, color }: { valor: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.round((valor / max) * 100) : 0;
-  const minH = valor > 0 ? 2 : 0;
+  // Usamos píxeles directos: % no funciona cuando el wrapper no tiene altura explícita
+  const px = max > 0 ? Math.round((valor / max) * ALTURA_PX) : 0;
+  const altPx = Math.max(px, valor > 0 ? 2 : 0);
   return (
-    <div className="group/barra relative flex justify-center">
+    <div className="group relative flex justify-center">
       <div
-        className={`w-3.5 rounded-t-sm transition-opacity group-hover/barra:opacity-75 ${color}`}
-        style={{ height: `${Math.max(pct, minH)}%` }}
+        className={`w-3.5 rounded-t-sm transition-opacity group-hover:opacity-75 ${color}`}
+        style={{ height: `${altPx}px` }}
       />
       {valor > 0 && (
-        <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] text-white group-hover/barra:block">
+        <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] text-white group-hover:block">
           {formatCLP(valor)}
         </div>
       )}
