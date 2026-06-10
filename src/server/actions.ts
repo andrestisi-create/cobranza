@@ -24,7 +24,7 @@ function revalidarCobranza() {
 const pagoSchema = z.object({
   recordId: z.string().min(1),
   montoPago: z.coerce.number().positive("El monto debe ser mayor a 0"),
-  medioPago: z.enum(["TRANSFERENCIA", "CHEQUE", "EFECTIVO", "TARJETA", "OTRO"]),
+  medioPago: z.enum(["TRANSFERENCIA", "WEBPAY", "MERCADOPAGO_LINK", "MERCADOPAGO_TARJETA", "CHEQUE", "EFECTIVO", "OTRO"]),
   fechaPago: z.string().optional(),
   referencia: z.string().optional(),
   observacion: z.string().optional(),
