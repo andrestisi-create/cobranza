@@ -7,11 +7,11 @@ import { ImportCSV, type ColConfig } from "@/components/import-csv";
 import type { ActionState } from "@/lib/types";
 
 const COLUMNAS_ALUMNOS: ColConfig[] = [
-  { campo: "nombre",          label: "Nombre",           requerido: true },
-  { campo: "apellidoPaterno", label: "Apellido paterno", requerido: true },
+  { campo: "rut",             label: "RUT",              requerido: true,  descripcion: "Ej: 12.345.678-9 (debe ser único)" },
+  { campo: "nombre",          label: "Nombre",           requerido: false },
+  { campo: "apellidoPaterno", label: "Apellido paterno", requerido: false },
   { campo: "segundoNombre",   label: "Segundo nombre",   requerido: false },
   { campo: "apellidoMaterno", label: "Apellido materno", requerido: false },
-  { campo: "rut",             label: "RUT",              requerido: false, descripcion: "Ej: 12.345.678-9 (debe ser único)" },
   { campo: "email",           label: "Email",            requerido: false },
   { campo: "telefono",        label: "Teléfono",         requerido: false },
   { campo: "direccion",       label: "Dirección",        requerido: false },
