@@ -30,7 +30,20 @@ interface Props {
 }
 
 // ─────────────────────────────────────────────
-// Parser CSV (soporta coma y punto-y-coma, comillas dobles, BOM)
+// Helpers de fecha (acepta YYYY-MM-DD y DD-MM-YYYY)
+// ─────────────────────────────────────────────
+
+function esFechaValida(str: string): boolean {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return !isNaN(Date.parse(str));
+  if (/^\d{2}-\d{2}-\d{4}$/.test(str)) {
+    const [d, m, y] = str.split("-");
+    return !isNaN(Date.parse(`${y}-${m}-${d}`));
+  }
+  return false;
+}
+
+// ─────────────────────────────────────────────
+// Parser CSV (soporta coma, punto-y-coma, tabulador, comillas dobles, BOM)
 // ─────────────────────────────────────────────
 
 function parsearCSV(
@@ -49,11 +62,17 @@ function parsearCSV(
     return { filas: [], erroresValidacion: [], headersDesconocidos: [] };
   }
 
-  // Detectar delimitador
+  // Detectar delimitador (coma, punto y coma o tabulador)
   const primeraLinea = lineas[0];
-  const countComa = (primeraLinea.match(/,/g) ?? []).length;
-  const countPuntoYComa = (primeraLinea.match(/;/g) ?? []).length;
-  const delimitador = countPuntoYComa > countComa ? ";" : ",";
+  const countComa       = (primeraLinea.match(/,/g)  ?? []).length;
+  const countPuntoYComa = (primeraLinea.match(/;/g)  ?? []).length;
+  const countTab        = (primeraLinea.match(/\t/g) ?? []).length;
+  const delimitador =
+    countTab > 0 && countTab >= countComa && countTab >= countPuntoYComa
+      ? "\t"
+      : countPuntoYComa > countComa
+        ? ";"
+        : ",";
 
   const splitLinea = (linea: string): string[] => {
     const campos: string[] = [];
@@ -118,12 +137,12 @@ function parsearCSV(
       } else if (
         valor &&
         col.tipo === "fecha" &&
-        isNaN(Date.parse(valor))
+        !esFechaValida(valor)
       ) {
         erroresValidacion.push({
           fila: i + 1,
           campo: col.campo,
-          mensaje: `"${col.label}": fecha inválida. Usar formato YYYY-MM-DD`,
+          mensaje: `"${col.label}": fecha inválida. Usar formato YYYY-MM-DD o DD-MM-YYYY`,
         });
       } else if (
         valor &&

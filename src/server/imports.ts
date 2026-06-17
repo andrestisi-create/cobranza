@@ -5,6 +5,15 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import type { ActionState } from "@/lib/types";
 
+/** Parsea fechas en YYYY-MM-DD o DD-MM-YYYY. */
+function parseFecha(str: string): Date {
+  if (/^\d{2}-\d{2}-\d{4}$/.test(str.trim())) {
+    const [d, m, y] = str.trim().split("-");
+    return new Date(`${y}-${m}-${d}`);
+  }
+  return new Date(str.trim());
+}
+
 async function requireGestion() {
   const session = await auth();
   if (!session?.user) throw new Error("No autenticado");
@@ -97,8 +106,8 @@ export async function importarProgramas(
       const cod = r.codPrograma?.trim();
       const data = {
         descripcion: r.descripcion?.trim() ?? "",
-        fechaInicio: new Date(r.fechaInicio?.trim()),
-        fechaFin: new Date(r.fechaFin?.trim()),
+        fechaInicio: parseFecha(r.fechaInicio?.trim()),
+        fechaFin: parseFecha(r.fechaFin?.trim()),
         valor: r.valor?.trim() ? Number(r.valor.trim()) : null,
       };
 
@@ -335,7 +344,7 @@ export async function importarPagos(
           recordId,
           montoPago: monto,
           fechaPago: r.fechaPago?.trim()
-            ? new Date(r.fechaPago.trim())
+            ? parseFecha(r.fechaPago.trim())
             : new Date(),
           medioPago,
           referencia: r.referencia?.trim() || null,
@@ -356,7 +365,7 @@ export async function importarPagos(
             tipoDocto: tipoDoctoRaw,
             folio: r.folioDocto?.trim() || null,
             fechaEmision: r.fechaDocto?.trim()
-              ? new Date(r.fechaDocto.trim())
+              ? parseFecha(r.fechaDocto.trim())
               : null,
             monto: r.montoDocto?.trim()
               ? Number(r.montoDocto.trim())
