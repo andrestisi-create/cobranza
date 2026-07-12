@@ -199,108 +199,157 @@ export async function importarNegocios(
     return { error: `No se pudieron cargar los catálogos: ${e instanceof Error ? e.message : "error desconocido"}` };
   }
 
-  let creados = 0;
   const errores: { fila: number; mensaje: string }[] = [];
+
+  // ── Precargar todo lo necesario en memoria (evita N+1: 1 query en vez de miles) ──
+  const rutsArchivo = [...new Set(rows.map((r) => r.rutAlumno?.trim()).filter(Boolean))];
+  const codsPrograma = [...new Set(rows.map((r) => r.codPrograma?.trim()).filter(Boolean))];
+  const recordIdsArchivo = rows.map((r) => r.recordId?.trim()).filter(Boolean);
+
+  let alumnosDb, programasDb, negociosExistentes;
+  try {
+    [alumnosDb, programasDb, negociosExistentes] = await Promise.all([
+      prisma.alumno.findMany({ where: { rut: { in: rutsArchivo } }, select: { idAlumno: true, rut: true } }),
+      prisma.programa.findMany({ where: { codPrograma: { in: codsPrograma } }, select: { codPrograma: true } }),
+      prisma.negocio.findMany({ where: { recordId: { in: recordIdsArchivo } }, select: { recordId: true } }),
+    ]);
+  } catch (e) {
+    return { error: `No se pudieron precargar los datos: ${e instanceof Error ? e.message : "error desconocido"}` };
+  }
+
+  const alumnoPorRut = new Map(alumnosDb.map((a) => [a.rut, a]));
+  const programasValidos = new Set(programasDb.map((p) => p.codPrograma));
+  const recordIdsExistentes = new Set(negociosExistentes.map((n) => n.recordId));
+  const recordIdsVistos = new Set<string>();
+
+  interface NegocioInput {
+    recordId: string;
+    idAlumno: string;
+    codPrograma: string;
+    montoNegocio: number;
+    moneda: "CLP" | "PEN" | "USD";
+    tipoNegocio: string;
+    tipoVenta: string;
+    tipoDocto: string;
+    estadoNegocio: string;
+  }
+  interface OcInput {
+    recordId: string;
+    tipoOC: "OTIC" | "OTEC" | "EMPRESA";
+    numeroOC: string;
+    entidadNombre: string;
+    entidadRut: string | null;
+    monto: number;
+    estadoOC: "PENDIENTE";
+  }
+  const negociosACrear: NegocioInput[] = [];
+  const ocsACrear: OcInput[] = [];
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     const fila = i + 2;
-    try {
-      // Validar recordId
-      const recordId = r.recordId?.trim();
-      if (!recordId || !/^\d+$/.test(recordId)) {
-        errores.push({ fila, mensaje: "Record ID inválido (debe ser un número entero)" });
-        continue;
-      }
 
-      // Buscar alumno por RUT
-      const alumno = await prisma.alumno.findFirst({
-        where: { rut: r.rutAlumno?.trim() },
-      });
-      if (!alumno) {
-        errores.push({
-          fila,
-          mensaje: `Alumno con RUT "${r.rutAlumno?.trim()}" no encontrado`,
-        });
-        continue;
-      }
+    const recordId = r.recordId?.trim();
+    if (!recordId || !/^\d+$/.test(recordId)) {
+      errores.push({ fila, mensaje: "Record ID inválido (debe ser un número entero)" });
+      continue;
+    }
+    if (recordIdsExistentes.has(recordId)) {
+      errores.push({ fila, mensaje: `Record ID "${recordId}" ya existe en el sistema` });
+      continue;
+    }
+    if (recordIdsVistos.has(recordId)) {
+      errores.push({ fila, mensaje: `Record ID "${recordId}" duplicado dentro del archivo` });
+      continue;
+    }
 
-      // Verificar programa
-      const programa = await prisma.programa.findUnique({
-        where: { codPrograma: r.codPrograma?.trim() },
-      });
-      if (!programa) {
-        errores.push({
-          fila,
-          mensaje: `Programa "${r.codPrograma?.trim()}" no encontrado`,
-        });
-        continue;
-      }
+    const rut = r.rutAlumno?.trim();
+    const alumno = alumnoPorRut.get(rut ?? "");
+    if (!alumno) {
+      errores.push({ fila, mensaje: `Alumno con RUT "${rut}" no encontrado` });
+      continue;
+    }
 
-      const tipoNegocio = r.tipoNegocio?.trim();
-      const tipoVenta = r.tipoVenta?.trim();
-      const tipoDocto = r.tipoDocto?.trim();
-      const estadoNegocio = r.estadoNegocio?.trim() || "MATRICULADO";
-      const moneda = r.moneda?.trim().toUpperCase() || "CLP";
+    const codPrograma = r.codPrograma?.trim() ?? "";
+    if (!programasValidos.has(codPrograma)) {
+      errores.push({ fila, mensaje: `Programa "${codPrograma}" no encontrado` });
+      continue;
+    }
 
-      if (!opciones.tiposNegocio.includes(tipoNegocio)) {
-        errores.push({ fila, mensaje: `Tipo negocio inválido: "${tipoNegocio}". Válidos: ${opciones.tiposNegocio.join(", ")}` });
-        continue;
-      }
-      if (!opciones.tiposVenta.includes(tipoVenta)) {
-        errores.push({ fila, mensaje: `Tipo venta inválido: "${tipoVenta}". Válidos: ${opciones.tiposVenta.join(", ")}` });
-        continue;
-      }
-      if (!opciones.tiposDocto.includes(tipoDocto)) {
-        errores.push({ fila, mensaje: `Tipo documento inválido: "${tipoDocto}". Válidos: ${opciones.tiposDocto.join(", ")}` });
-        continue;
-      }
-      if (!opciones.estadosNegocio.includes(estadoNegocio)) {
-        errores.push({ fila, mensaje: `Estado inválido: "${estadoNegocio}". Válidos: ${opciones.estadosNegocio.join(", ")}` });
-        continue;
-      }
-      if (!MONEDAS_VALIDAS.includes(moneda)) {
-        errores.push({ fila, mensaje: `Moneda inválida: "${moneda}". Válidas: ${MONEDAS_VALIDAS.join(", ")}` });
-        continue;
-      }
+    const tipoNegocio = r.tipoNegocio?.trim() ?? "";
+    const tipoVenta = r.tipoVenta?.trim() ?? "";
+    const tipoDocto = r.tipoDocto?.trim() ?? "";
+    const estadoNegocio = r.estadoNegocio?.trim() || "MATRICULADO";
+    const moneda = r.moneda?.trim().toUpperCase() || "CLP";
 
-      const negocio = await prisma.negocio.create({
-        data: {
-          recordId,
-          idAlumno: alumno.idAlumno,
-          codPrograma: programa.codPrograma,
-          montoNegocio: parseNumero(r.montoNegocio),
-          moneda: moneda as "CLP" | "PEN" | "USD",
-          tipoNegocio,
-          tipoVenta,
-          tipoDocto,
-          estadoNegocio,
-        },
-      });
+    if (!opciones.tiposNegocio.includes(tipoNegocio)) {
+      errores.push({ fila, mensaje: `Tipo negocio inválido: "${tipoNegocio}". Válidos: ${opciones.tiposNegocio.join(", ")}` });
+      continue;
+    }
+    if (!opciones.tiposVenta.includes(tipoVenta)) {
+      errores.push({ fila, mensaje: `Tipo venta inválido: "${tipoVenta}". Válidos: ${opciones.tiposVenta.join(", ")}` });
+      continue;
+    }
+    if (!opciones.tiposDocto.includes(tipoDocto)) {
+      errores.push({ fila, mensaje: `Tipo documento inválido: "${tipoDocto}". Válidos: ${opciones.tiposDocto.join(", ")}` });
+      continue;
+    }
+    if (!opciones.estadosNegocio.includes(estadoNegocio)) {
+      errores.push({ fila, mensaje: `Estado inválido: "${estadoNegocio}". Válidos: ${opciones.estadosNegocio.join(", ")}` });
+      continue;
+    }
+    if (!MONEDAS_VALIDAS.includes(moneda)) {
+      errores.push({ fila, mensaje: `Moneda inválida: "${moneda}". Válidas: ${MONEDAS_VALIDAS.join(", ")}` });
+      continue;
+    }
 
-      // Crear OCs si vienen en el CSV
-      const ocsImport = extraerOcs(r);
-      for (const oc of ocsImport) {
-        await prisma.ordenCompra.create({
-          data: {
-            recordId: negocio.recordId,
-            tipoOC: oc.tipo,
-            numeroOC: oc.numero,
-            entidadNombre: oc.entidadNombre,
-            entidadRut: oc.entidadRut,
-            monto: oc.monto,
-            estadoOC: "PENDIENTE",
-          },
-        });
-      }
+    const montoNegocio = parseNumero(r.montoNegocio);
+    if (isNaN(montoNegocio) || montoNegocio <= 0) {
+      errores.push({ fila, mensaje: `Monto inválido: "${r.montoNegocio}"` });
+      continue;
+    }
 
-      creados++;
-    } catch (e) {
-      errores.push({
-        fila,
-        mensaje: `No se pudo crear el negocio: ${e instanceof Error ? e.message : "error desconocido"}`,
+    recordIdsVistos.add(recordId);
+    negociosACrear.push({
+      recordId,
+      idAlumno: alumno.idAlumno,
+      codPrograma,
+      montoNegocio,
+      moneda: moneda as "CLP" | "PEN" | "USD",
+      tipoNegocio,
+      tipoVenta,
+      tipoDocto,
+      estadoNegocio,
+    });
+
+    for (const oc of extraerOcs(r)) {
+      ocsACrear.push({
+        recordId,
+        tipoOC: oc.tipo,
+        numeroOC: oc.numero,
+        entidadNombre: oc.entidadNombre,
+        entidadRut: oc.entidadRut,
+        monto: oc.monto,
+        estadoOC: "PENDIENTE",
       });
     }
+  }
+
+  // ── Insertar en lotes (createMany) en vez de fila por fila ──
+  const TAM_LOTE = 500;
+  let creados = 0;
+  try {
+    for (let i = 0; i < negociosACrear.length; i += TAM_LOTE) {
+      const lote = negociosACrear.slice(i, i + TAM_LOTE);
+      const resultado = await prisma.negocio.createMany({ data: lote, skipDuplicates: true });
+      creados += resultado.count;
+    }
+    for (let i = 0; i < ocsACrear.length; i += TAM_LOTE) {
+      const lote = ocsACrear.slice(i, i + TAM_LOTE);
+      await prisma.ordenCompra.createMany({ data: lote });
+    }
+  } catch (e) {
+    return { error: `Error al insertar en la base de datos: ${e instanceof Error ? e.message : "error desconocido"}` };
   }
 
   if (creados > 0) {
@@ -317,11 +366,17 @@ export async function importarNegocios(
 // Importar pagos masivos (+ documento opcional)
 // ─────────────────────────────────────────────
 
+const MEDIOS_VALIDOS = ["TRANSFERENCIA", "WEBPAY", "MERCADOPAGO_LINK", "MERCADOPAGO_TARJETA", "CHEQUE", "EFECTIVO", "OTRO"];
+
 export async function importarPagos(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  await requireGestion();
+  try {
+    await requireGestion();
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Sin permisos" };
+  }
 
   const raw = fd.get("json");
   if (!raw) return { error: "No se recibieron datos" };
@@ -333,83 +388,101 @@ export async function importarPagos(
     return { error: "Datos inválidos" };
   }
 
-  let creados = 0;
   const errores: { fila: number; mensaje: string }[] = [];
+
+  // ── Precargar los negocios referenciados (evita N+1: 1 query en vez de miles) ──
+  const recordIdsArchivo = [...new Set(rows.map((r) => r.recordId?.trim()).filter(Boolean))];
+  let negociosDb;
+  try {
+    negociosDb = await prisma.negocio.findMany({
+      where: { recordId: { in: recordIdsArchivo } },
+      select: { recordId: true },
+    });
+  } catch (e) {
+    return { error: `No se pudieron precargar los negocios: ${e instanceof Error ? e.message : "error desconocido"}` };
+  }
+  const recordIdsValidos = new Set(negociosDb.map((n) => n.recordId));
+
+  interface PagoInput {
+    recordId: string;
+    montoPago: number;
+    fechaPago: Date;
+    medioPago: "TRANSFERENCIA" | "WEBPAY" | "MERCADOPAGO_LINK" | "MERCADOPAGO_TARJETA" | "CHEQUE" | "EFECTIVO" | "OTRO";
+    referencia: string | null;
+    observacion: string | null;
+  }
+  interface DocumentoInput {
+    recordId: string;
+    tipoDocto: string;
+    folio: string | null;
+    fechaEmision: Date | null;
+    monto: number;
+  }
+  const pagosACrear: PagoInput[] = [];
+  const documentosACrear: DocumentoInput[] = [];
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     const fila = i + 2;
-    try {
-      const recordId = r.recordId?.trim();
-      if (!recordId) {
-        errores.push({ fila, mensaje: "Record ID requerido" });
-        continue;
-      }
 
-      // Verificar que el negocio existe
-      const negocio = await prisma.negocio.findUnique({ where: { recordId } });
-      if (!negocio) {
-        errores.push({
-          fila,
-          mensaje: `Negocio con Record ID "${recordId}" no encontrado`,
-        });
-        continue;
-      }
+    const recordId = r.recordId?.trim();
+    if (!recordId) {
+      errores.push({ fila, mensaje: "Record ID requerido" });
+      continue;
+    }
+    if (!recordIdsValidos.has(recordId)) {
+      errores.push({ fila, mensaje: `Negocio con Record ID "${recordId}" no encontrado` });
+      continue;
+    }
 
-      const monto = parseNumero(r.montoPago);
-      if (!monto || monto <= 0) {
-        errores.push({ fila, mensaje: "Monto de pago inválido" });
-        continue;
-      }
+    const monto = parseNumero(r.montoPago);
+    if (!monto || monto <= 0) {
+      errores.push({ fila, mensaje: "Monto de pago inválido" });
+      continue;
+    }
 
-      const medioRaw = r.medioPago?.trim().toUpperCase();
-      const MEDIOS_VALIDOS = ["TRANSFERENCIA", "WEBPAY", "MERCADOPAGO_LINK", "MERCADOPAGO_TARJETA", "CHEQUE", "EFECTIVO", "OTRO"];
-      const medioPago = (
-        MEDIOS_VALIDOS.includes(medioRaw) ? medioRaw : "TRANSFERENCIA"
-      ) as "TRANSFERENCIA" | "WEBPAY" | "MERCADOPAGO_LINK" | "MERCADOPAGO_TARJETA" | "CHEQUE" | "EFECTIVO" | "OTRO";
+    const medioRaw = r.medioPago?.trim().toUpperCase();
+    const medioPago = (
+      MEDIOS_VALIDOS.includes(medioRaw) ? medioRaw : "TRANSFERENCIA"
+    ) as PagoInput["medioPago"];
 
-      await prisma.pago.create({
-        data: {
-          recordId,
-          montoPago: monto,
-          fechaPago: r.fechaPago?.trim()
-            ? parseFecha(r.fechaPago.trim())
-            : new Date(),
-          medioPago,
-          referencia: r.referencia?.trim() || null,
-          observacion: r.observacion?.trim() || null,
-        },
-      });
+    pagosACrear.push({
+      recordId,
+      montoPago: monto,
+      fechaPago: r.fechaPago?.trim() ? parseFecha(r.fechaPago.trim()) : new Date(),
+      medioPago,
+      referencia: r.referencia?.trim() || null,
+      observacion: r.observacion?.trim() || null,
+    });
 
-      // Documento tributario opcional (boleta, factura, OC)
-      const tipoDoctoRaw = r.tipoDocto?.trim().toUpperCase();
-      if (
-        tipoDoctoRaw === "FACTURA" ||
-        tipoDoctoRaw === "BOLETA" ||
-        tipoDoctoRaw === "ORDEN_COMPRA"
-      ) {
-        await prisma.documentoTributario.create({
-          data: {
-            recordId,
-            tipoDocto: tipoDoctoRaw,
-            folio: r.folioDocto?.trim() || null,
-            fechaEmision: r.fechaDocto?.trim()
-              ? parseFecha(r.fechaDocto.trim())
-              : null,
-            monto: r.montoDocto?.trim()
-              ? parseNumero(r.montoDocto)
-              : monto,
-          },
-        });
-      }
-
-      creados++;
-    } catch (e) {
-      errores.push({
-        fila,
-        mensaje: `No se pudo registrar el pago: ${e instanceof Error ? e.message : "error desconocido"}`,
+    // Documento tributario opcional (boleta, factura, OC)
+    const tipoDoctoRaw = r.tipoDocto?.trim().toUpperCase();
+    if (tipoDoctoRaw === "FACTURA" || tipoDoctoRaw === "BOLETA" || tipoDoctoRaw === "ORDEN_COMPRA") {
+      documentosACrear.push({
+        recordId,
+        tipoDocto: tipoDoctoRaw,
+        folio: r.folioDocto?.trim() || null,
+        fechaEmision: r.fechaDocto?.trim() ? parseFecha(r.fechaDocto.trim()) : null,
+        monto: r.montoDocto?.trim() ? parseNumero(r.montoDocto) : monto,
       });
     }
+  }
+
+  // ── Insertar en lotes (createMany) en vez de fila por fila ──
+  const TAM_LOTE = 500;
+  let creados = 0;
+  try {
+    for (let i = 0; i < pagosACrear.length; i += TAM_LOTE) {
+      const lote = pagosACrear.slice(i, i + TAM_LOTE);
+      const resultado = await prisma.pago.createMany({ data: lote });
+      creados += resultado.count;
+    }
+    for (let i = 0; i < documentosACrear.length; i += TAM_LOTE) {
+      const lote = documentosACrear.slice(i, i + TAM_LOTE);
+      await prisma.documentoTributario.createMany({ data: lote });
+    }
+  } catch (e) {
+    return { error: `Error al insertar en la base de datos: ${e instanceof Error ? e.message : "error desconocido"}` };
   }
 
   if (creados > 0) {
