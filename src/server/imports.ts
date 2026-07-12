@@ -222,6 +222,24 @@ export async function importarNegocios(
   const recordIdsExistentes = new Set(negociosExistentes.map((n) => n.recordId));
   const recordIdsVistos = new Set<string>();
 
+  // ── Crear automáticamente los alumnos cuyo RUT no existe (solo con el RUT) ──
+  const rutsFaltantes = rutsArchivo.filter((rut) => !alumnoPorRut.has(rut));
+  if (rutsFaltantes.length > 0) {
+    try {
+      await prisma.alumno.createMany({
+        data: rutsFaltantes.map((rut) => ({ rut, nombre: "", apellidoPaterno: "" })),
+        skipDuplicates: true,
+      });
+      const alumnosCreados = await prisma.alumno.findMany({
+        where: { rut: { in: rutsFaltantes } },
+        select: { idAlumno: true, rut: true },
+      });
+      for (const a of alumnosCreados) alumnoPorRut.set(a.rut, a);
+    } catch (e) {
+      return { error: `No se pudieron crear los alumnos faltantes: ${e instanceof Error ? e.message : "error desconocido"}` };
+    }
+  }
+
   interface NegocioInput {
     recordId: string;
     idAlumno: string;
@@ -264,9 +282,13 @@ export async function importarNegocios(
     }
 
     const rut = r.rutAlumno?.trim();
-    const alumno = alumnoPorRut.get(rut ?? "");
+    if (!rut) {
+      errores.push({ fila, mensaje: "RUT del alumno requerido" });
+      continue;
+    }
+    const alumno = alumnoPorRut.get(rut);
     if (!alumno) {
-      errores.push({ fila, mensaje: `Alumno con RUT "${rut}" no encontrado` });
+      errores.push({ fila, mensaje: `No se pudo crear/encontrar el alumno con RUT "${rut}"` });
       continue;
     }
 
