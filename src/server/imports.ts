@@ -1,11 +1,15 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import type { ActionState } from "@/lib/types";
 import { getTodasLasOpciones } from "@/server/opciones";
 import { parseNumero } from "@/lib/format";
+
+const TAM_LOTE = 500;
 
 /** Parsea fechas en YYYY-MM-DD o DD-MM-YYYY. */
 function parseFecha(str: string): Date {
@@ -42,32 +46,75 @@ export async function importarAlumnos(
     return { error: "Datos inválidos" };
   }
 
-  let creados = 0;
   const errores: { fila: number; mensaje: string }[] = [];
+
+  interface AlumnoInput {
+    idAlumno: string;
+    rut: string;
+    nombre: string;
+    segundoNombre: string | null;
+    apellidoPaterno: string;
+    apellidoMaterno: string | null;
+    email: string | null;
+    telefono: string | null;
+    direccion: string | null;
+    fechaNacimiento: Date | null;
+  }
+
+  // Si el mismo RUT aparece varias veces en el archivo, gana la última fila
+  // (evita el error de Postgres "ON CONFLICT DO UPDATE cannot affect row a second time").
+  const porRut = new Map<string, AlumnoInput>();
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     const fila = i + 2; // fila 1 = encabezado
-    try {
-      await prisma.alumno.create({
-        data: {
-          nombre: r.nombre?.trim() ?? "",
-          apellidoPaterno: r.apellidoPaterno?.trim() ?? "",
-          segundoNombre: r.segundoNombre?.trim() || null,
-          apellidoMaterno: r.apellidoMaterno?.trim() || null,
-          rut: r.rut?.trim() || null,
-          email: r.email?.trim() || null,
-          telefono: r.telefono?.trim() || null,
-          direccion: r.direccion?.trim() || null,
-          fechaNacimiento: r.fechaNacimiento?.trim()
-            ? new Date(r.fechaNacimiento.trim())
-            : null,
-        },
-      });
-      creados++;
-    } catch {
-      errores.push({ fila, mensaje: "No se pudo crear (¿RUT duplicado?)" });
+    const rut = r.rut?.trim();
+    if (!rut) {
+      errores.push({ fila, mensaje: "RUT requerido" });
+      continue;
     }
+    porRut.set(rut, {
+      idAlumno: randomUUID(),
+      rut,
+      nombre: r.nombre?.trim() ?? "",
+      segundoNombre: r.segundoNombre?.trim() || null,
+      apellidoPaterno: r.apellidoPaterno?.trim() ?? "",
+      apellidoMaterno: r.apellidoMaterno?.trim() || null,
+      email: r.email?.trim() || null,
+      telefono: r.telefono?.trim() || null,
+      direccion: r.direccion?.trim() || null,
+      fechaNacimiento: r.fechaNacimiento?.trim() ? new Date(r.fechaNacimiento.trim()) : null,
+    });
+  }
+
+  const alumnos = [...porRut.values()];
+  let creados = 0;
+  try {
+    for (let i = 0; i < alumnos.length; i += TAM_LOTE) {
+      const lote = alumnos.slice(i, i + TAM_LOTE);
+      const values = lote.map(
+        (a) => Prisma.sql`(${a.idAlumno}, ${a.rut}, ${a.nombre}, ${a.segundoNombre}, ${a.apellidoPaterno}, ${a.apellidoMaterno}, ${a.email}, ${a.telefono}, ${a.direccion}, ${a.fechaNacimiento})`,
+      );
+      // Upsert por RUT: si ya existe, actualiza — pero solo sobreescribe campos
+      // que vengan con valor en el archivo, para no borrar datos ya cargados
+      // con una fila que solo trae el RUT.
+      const count = await prisma.$executeRaw`
+        INSERT INTO "alumnos" ("idAlumno","rut","nombre","segundoNombre","apellidoPaterno","apellidoMaterno","email","telefono","direccion","fechaNacimiento")
+        VALUES ${Prisma.join(values)}
+        ON CONFLICT ("rut") DO UPDATE SET
+          "nombre" = COALESCE(NULLIF(EXCLUDED."nombre", ''), "alumnos"."nombre"),
+          "segundoNombre" = COALESCE(EXCLUDED."segundoNombre", "alumnos"."segundoNombre"),
+          "apellidoPaterno" = COALESCE(NULLIF(EXCLUDED."apellidoPaterno", ''), "alumnos"."apellidoPaterno"),
+          "apellidoMaterno" = COALESCE(EXCLUDED."apellidoMaterno", "alumnos"."apellidoMaterno"),
+          "email" = COALESCE(EXCLUDED."email", "alumnos"."email"),
+          "telefono" = COALESCE(EXCLUDED."telefono", "alumnos"."telefono"),
+          "direccion" = COALESCE(EXCLUDED."direccion", "alumnos"."direccion"),
+          "fechaNacimiento" = COALESCE(EXCLUDED."fechaNacimiento", "alumnos"."fechaNacimiento")
+      `;
+      creados += count;
+    }
+  } catch (e) {
+    return { error: `No se pudieron guardar los alumnos: ${e instanceof Error ? e.message : "error desconocido"}` };
   }
 
   if (creados > 0) {
@@ -275,10 +322,7 @@ export async function importarNegocios(
       errores.push({ fila, mensaje: "Record ID inválido (debe ser un número entero)" });
       continue;
     }
-    if (recordIdsExistentes.has(recordId)) {
-      errores.push({ fila, mensaje: `Record ID "${recordId}" ya existe en el sistema` });
-      continue;
-    }
+    // Si el Record ID ya existe se actualiza (upsert); si no, se crea.
     if (recordIdsVistos.has(recordId)) {
       errores.push({ fila, mensaje: `Record ID "${recordId}" duplicado dentro del archivo` });
       continue;
@@ -347,27 +391,46 @@ export async function importarNegocios(
       estadoNegocio,
     });
 
-    for (const oc of extraerOcs(r)) {
-      ocsACrear.push({
-        recordId,
-        tipoOC: oc.tipo,
-        numeroOC: oc.numero,
-        entidadNombre: oc.entidadNombre,
-        entidadRut: oc.entidadRut,
-        monto: oc.monto,
-        estadoOC: "PENDIENTE",
-      });
+    // Las OCs solo se crean para negocios nuevos — si el negocio ya existía y se
+    // está actualizando, no se vuelven a agregar (evitaría duplicarlas en cada re-carga).
+    if (!recordIdsExistentes.has(recordId)) {
+      for (const oc of extraerOcs(r)) {
+        ocsACrear.push({
+          recordId,
+          tipoOC: oc.tipo,
+          numeroOC: oc.numero,
+          entidadNombre: oc.entidadNombre,
+          entidadRut: oc.entidadRut,
+          monto: oc.monto,
+          estadoOC: "PENDIENTE",
+        });
+      }
     }
   }
 
-  // ── Insertar en lotes (createMany) en vez de fila por fila ──
-  const TAM_LOTE = 500;
+  // ── Insertar/actualizar en lotes vía upsert masivo (INSERT ... ON CONFLICT) ──
   let creados = 0;
   try {
     for (let i = 0; i < negociosACrear.length; i += TAM_LOTE) {
       const lote = negociosACrear.slice(i, i + TAM_LOTE);
-      const resultado = await prisma.negocio.createMany({ data: lote, skipDuplicates: true });
-      creados += resultado.count;
+      const values = lote.map(
+        (n) => Prisma.sql`(${n.recordId}, ${n.idAlumno}, ${n.codPrograma}, ${n.montoNegocio}, ${n.moneda}::"Moneda", ${n.tipoNegocio}, ${n.tipoVenta}, ${n.tipoDocto}, ${n.estadoNegocio}, NOW())`,
+      );
+      const count = await prisma.$executeRaw`
+        INSERT INTO "negocios" ("recordId","idAlumno","codPrograma","montoNegocio","moneda","tipoNegocio","tipoVenta","tipoDocto","estadoNegocio","updatedAt")
+        VALUES ${Prisma.join(values)}
+        ON CONFLICT ("recordId") DO UPDATE SET
+          "idAlumno" = EXCLUDED."idAlumno",
+          "codPrograma" = EXCLUDED."codPrograma",
+          "montoNegocio" = EXCLUDED."montoNegocio",
+          "moneda" = EXCLUDED."moneda",
+          "tipoNegocio" = EXCLUDED."tipoNegocio",
+          "tipoVenta" = EXCLUDED."tipoVenta",
+          "tipoDocto" = EXCLUDED."tipoDocto",
+          "estadoNegocio" = EXCLUDED."estadoNegocio",
+          "updatedAt" = NOW()
+      `;
+      creados += count;
     }
     for (let i = 0; i < ocsACrear.length; i += TAM_LOTE) {
       const lote = ocsACrear.slice(i, i + TAM_LOTE);
@@ -494,7 +557,6 @@ export async function importarPagos(
   }
 
   // ── Insertar en lotes (createMany) en vez de fila por fila ──
-  const TAM_LOTE = 500;
   let creados = 0;
   try {
     for (let i = 0; i < pagosACrear.length; i += TAM_LOTE) {
