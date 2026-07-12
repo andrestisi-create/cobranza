@@ -44,6 +44,7 @@ export interface NegocioRow {
   recordId: string;
   idAlumno: string;
   alumnoNombre: string;
+  alumnoRut: string | null;
   codPrograma: string;
   montoNegocio: number;
   moneda: string;
@@ -642,6 +643,7 @@ export function NegociosManager({
       (n) =>
         n.recordId.toLowerCase().includes(term) ||
         n.alumnoNombre.toLowerCase().includes(term) ||
+        (n.alumnoRut ?? "").toLowerCase().includes(term) ||
         n.codPrograma.toLowerCase().includes(term),
     );
   }, [negocios, q]);
@@ -768,8 +770,15 @@ export function NegociosManager({
                   <td className="px-3 py-2 text-slate-500">
                     {formatFecha(n.fechaCreacion)}
                   </td>
-                  <td className="px-3 py-2 font-medium text-slate-900">
-                    {n.alumnoNombre}
+                  <td className="px-3 py-2">
+                    <div className="font-medium text-slate-900">
+                      {n.alumnoNombre || (
+                        <span className="italic text-amber-600" title="Alumno creado automáticamente al cargar el negocio, aún sin nombre">
+                          Sin nombre
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-400">{n.alumnoRut ?? "—"}</div>
                   </td>
                   <td className="px-3 py-2 text-slate-600">{n.codPrograma}</td>
                   <td className="px-3 py-2 text-slate-600">

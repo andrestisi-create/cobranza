@@ -44,6 +44,7 @@ export default async function NegociosPage() {
       recordId: n.recordId,
       idAlumno: n.idAlumno,
       alumnoNombre: nombre(n.alumno),
+      alumnoRut: n.alumno.rut,
       codPrograma: n.codPrograma,
       montoNegocio: toNumber(n.montoNegocio),
       moneda: n.moneda,
