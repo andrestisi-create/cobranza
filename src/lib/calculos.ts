@@ -16,15 +16,13 @@ export interface ResumenCobranza {
   estadoCobranza: EstadoCobranza;
 }
 
-type Pagolike = { montoPago: unknown };
-
-/** Calcula totalPagado, saldo, % de avance y estado de cobranza de un negocio. */
+/** Calcula saldo, % de avance y estado de cobranza de un negocio a partir del total ya pagado. */
 export function resumenCobranza(
   montoNegocio: unknown,
-  pagos: Pagolike[],
+  totalPagadoInput: unknown,
 ): ResumenCobranza {
   const monto = toNumber(montoNegocio as number);
-  const totalPagado = pagos.reduce((acc, p) => acc + toNumber(p.montoPago as number), 0);
+  const totalPagado = toNumber(totalPagadoInput as number);
   const saldo = monto - totalPagado;
 
   let estadoCobranza: EstadoCobranza;

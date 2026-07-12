@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import {
   crearNegocio,
   actualizarNegocio,
@@ -9,6 +9,7 @@ import {
 } from "@/server/crud";
 import { eliminarOrdenCompra } from "@/server/actions";
 import { importarNegocios } from "@/server/imports";
+import { getDetalleNegocio } from "@/server/detalle";
 import { ImportCSV, type ColConfig } from "@/components/import-csv";
 import { Combobox, type OpcionCombobox } from "@/components/combobox";
 import type { ActionState } from "@/lib/types";
@@ -17,6 +18,7 @@ import { formatCLP, formatMonto, etiqueta, formatFecha, toNumber } from "@/lib/f
 import { TipoVentaBadge } from "@/components/badges";
 
 const MONEDAS = ["CLP", "PEN", "USD"] as const;
+const TAM_PAGINA = 50;
 
 /** Asegura que el valor actual del negocio aparezca en el <select> aunque haya sido desactivado. */
 function conValorActual(activos: string[], valorActual: string | undefined): string[] {
@@ -50,7 +52,8 @@ export interface NegocioRow {
   tipoDocto: string;
   estadoNegocio: string;
   fechaCreacion: string;
-  ordenes: OcRow[];
+  totalOC: number;
+  ordenesCount: number;
   idVendedor: string | null;
   vendedorNombre: string | null;
 }
@@ -114,12 +117,16 @@ const labelCls = "mb-1 block text-xs font-medium text-slate-600";
 // ─────────────────────────────────────────────
 
 function SeccionOC({
-  ocsSaved,        // OCs ya en DB (edición)
+  ocsSaved,        // OCs ya en DB (edición) — se traen bajo demanda
+  cargandoOcsSaved,
+  onEliminarOc,
   ocsPendientes,
   onChange,
   montoNegocio,
 }: {
   ocsSaved: OcRow[];
+  cargandoOcsSaved: boolean;
+  onEliminarOc: (fd: FormData) => void;
   ocsPendientes: OcPendiente[];
   onChange: (ocs: OcPendiente[]) => void;
   montoNegocio: number;
@@ -166,8 +173,11 @@ function SeccionOC({
         </button>
       </div>
 
-      {/* OCs ya guardadas (solo visible en edición) */}
-      {ocsSaved.length > 0 && (
+      {/* OCs ya guardadas (solo visible en edición, se traen bajo demanda) */}
+      {cargandoOcsSaved && (
+        <p className="mb-3 text-xs text-slate-400">Cargando OCs…</p>
+      )}
+      {!cargandoOcsSaved && ocsSaved.length > 0 && (
         <div className="mb-3 space-y-1.5">
           <p className="text-xs font-medium text-slate-400">OC guardadas</p>
           {ocsSaved.map((oc) => (
@@ -189,7 +199,7 @@ function SeccionOC({
                 </span>
                 <span className="text-slate-400">{etiqueta(oc.estadoOC)}</span>
               </div>
-              <form action={eliminarOrdenCompra}>
+              <form action={onEliminarOc}>
                 <input type="hidden" name="id" value={oc.id} />
                 <button
                   type="submit"
@@ -362,9 +372,23 @@ function FormNegocio({
 }) {
   const esEdicion = editing !== null;
   const [ocsPendientes, setOcsPendientes] = useState<OcPendiente[]>([]);
+  const [ocsGuardadas, setOcsGuardadas] = useState<OcRow[]>([]);
+  const [cargandoOcs, setCargandoOcs] = useState(false);
   const [montoInput, setMontoInput] = useState(
     editing ? String(editing.montoNegocio) : "",
   );
+
+  const refrescarOcsGuardadas = (recordId: string) => {
+    setCargandoOcs(true);
+    getDetalleNegocio(recordId)
+      .then((d) => setOcsGuardadas(d.ordenes))
+      .finally(() => setCargandoOcs(false));
+  };
+
+  const eliminarOcYRefrescar = async (fd: FormData) => {
+    await eliminarOrdenCompra(fd);
+    if (editing) refrescarOcsGuardadas(editing.recordId);
+  };
 
   const [stateCrear, dispatchCrear, pendingCrear] =
     useActionState<ActionState, FormData>(crearNegocio, undefined);
@@ -383,11 +407,14 @@ function FormNegocio({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  // Resetear OC pendientes al cambiar de negocio editado
+  // Resetear OC pendientes al cambiar de negocio editado, y traer las OC guardadas
   useEffect(() => {
     setOcsPendientes([]);
+    setOcsGuardadas([]);
     setMontoInput(editing ? String(editing.montoNegocio) : "");
-  }, [editing?.recordId]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (editing) refrescarOcsGuardadas(editing.recordId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing?.recordId]);
 
   return (
     <form
@@ -541,7 +568,9 @@ function FormNegocio({
 
       {/* Sección OC */}
       <SeccionOC
-        ocsSaved={editing?.ordenes ?? []}
+        ocsSaved={ocsGuardadas}
+        cargandoOcsSaved={cargandoOcs}
+        onEliminarOc={eliminarOcYRefrescar}
         ocsPendientes={ocsPendientes}
         onChange={setOcsPendientes}
         montoNegocio={toNumber(montoInput)}
@@ -596,6 +625,8 @@ export function NegociosManager({
 }) {
   // Almacena sólo el recordId (o "nuevo") — se deriva la fila viva desde `negocios`
   const [modoId, setModoId] = useState<string | "nuevo" | null>(null);
+  const [q, setQ] = useState("");
+  const [pagina, setPagina] = useState(1);
 
   const editingRow =
     modoId !== null && modoId !== "nuevo"
@@ -603,6 +634,28 @@ export function NegociosManager({
       : null;
 
   const formAbierto = modoId !== null;
+
+  const filtrados = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return negocios;
+    return negocios.filter(
+      (n) =>
+        n.recordId.toLowerCase().includes(term) ||
+        n.alumnoNombre.toLowerCase().includes(term) ||
+        n.codPrograma.toLowerCase().includes(term),
+    );
+  }, [negocios, q]);
+
+  useEffect(() => {
+    setPagina(1);
+  }, [q]);
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / TAM_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const visibles = filtrados.slice(
+    (paginaSegura - 1) * TAM_PAGINA,
+    paginaSegura * TAM_PAGINA,
+  );
 
   const opcionesAlumno: OpcionCombobox[] = alumnos.map((a) => ({
     valor: a.idAlumno,
@@ -657,6 +710,18 @@ export function NegociosManager({
         </div>
       )}
 
+      {/* Buscador */}
+      {!formAbierto && (
+        <div className="mb-3">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar por Record ID, alumno o programa…"
+            className="w-full max-w-md rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+          />
+        </div>
+      )}
+
       {/* Tabla */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">
@@ -677,8 +742,15 @@ export function NegociosManager({
             </tr>
           </thead>
           <tbody>
-            {negocios.map((n) => {
-              const totalOC = n.ordenes.reduce((s, o) => s + o.monto, 0);
+            {visibles.length === 0 && (
+              <tr>
+                <td colSpan={puedeGestionar ? 11 : 10} className="px-3 py-8 text-center text-slate-400">
+                  No hay negocios que coincidan con la búsqueda.
+                </td>
+              </tr>
+            )}
+            {visibles.map((n) => {
+              const totalOC = n.totalOC;
               const ocDescubierta =
                 n.tipoDocto === "ORDEN_COMPRA" && totalOC < n.montoNegocio;
               return (
@@ -719,12 +791,12 @@ export function NegociosManager({
                   </td>
                   {/* Columna OC */}
                   <td className="px-3 py-2 text-center">
-                    {n.ordenes.length > 0 ? (
+                    {n.ordenesCount > 0 ? (
                       <span
                         title={
                           ocDescubierta
                             ? `⚠ OC insuficiente — Total OC: ${formatCLP(totalOC)} · Faltan: ${formatCLP(n.montoNegocio - totalOC)}`
-                            : `${n.ordenes.length} OC · Total: ${formatCLP(totalOC)}`
+                            : `${n.ordenesCount} OC · Total: ${formatCLP(totalOC)}`
                         }
                         className={`inline-flex cursor-help items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
                           ocDescubierta
@@ -732,7 +804,7 @@ export function NegociosManager({
                             : "bg-indigo-100 text-indigo-700"
                         }`}
                       >
-                        {n.ordenes.length}
+                        {n.ordenesCount}
                       </span>
                     ) : n.tipoDocto === "ORDEN_COMPRA" ? (
                       <span
@@ -796,6 +868,34 @@ export function NegociosManager({
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* ── Paginación ── */}
+      <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+        <span>
+          {filtrados.length} de {negocios.length} negocios
+          {totalPaginas > 1 ? ` · página ${paginaSegura} de ${totalPaginas}` : ""}
+        </span>
+        {totalPaginas > 1 && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={paginaSegura <= 1}
+              onClick={() => setPagina((p) => Math.max(1, p - 1))}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              disabled={paginaSegura >= totalPaginas}
+              onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+            >
+              Siguiente
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

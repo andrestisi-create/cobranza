@@ -53,8 +53,10 @@ export function Combobox({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const LIMITE_RESULTADOS = 50;
+
   // Filtrar opciones por etiqueta y subEtiqueta
-  const opcionesFiltradas =
+  const opcionesCoincidentes =
     busqueda.trim() === ""
       ? opciones
       : opciones.filter((o) => {
@@ -64,6 +66,8 @@ export function Combobox({
             (o.subEtiqueta && o.subEtiqueta.toLowerCase().includes(q))
           );
         });
+  const opcionesFiltradas = opcionesCoincidentes.slice(0, LIMITE_RESULTADOS);
+  const hayMasResultados = opcionesCoincidentes.length > LIMITE_RESULTADOS;
 
   const seleccionar = (opcion: OpcionCombobox) => {
     setSeleccionado(opcion);
@@ -166,6 +170,11 @@ export function Combobox({
                 )}
               </li>
             ))
+          )}
+          {hayMasResultados && (
+            <li className="border-t border-slate-100 px-3 py-2 text-xs text-slate-400">
+              Sigue escribiendo para refinar…
+            </li>
           )}
         </ul>
       )}

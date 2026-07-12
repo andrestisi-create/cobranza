@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useEffect, useState } from "react";
+import { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import type { NegocioCobranza } from "@/server/queries";
 import type { TodasLasOpciones } from "@/server/opciones";
+import { getDetalleNegocio, type DetalleNegocio } from "@/server/detalle";
 import { formatCLP, formatMonto, formatFecha, etiqueta, cn } from "@/lib/format";
 import {
   EstadoNegocioBadge,
@@ -14,6 +15,8 @@ import { Drawer } from "@/components/drawer";
 import { PanelNegocio } from "@/components/panel-negocio";
 import { ImportCSV, type ColConfig } from "@/components/import-csv";
 import { importarPagos } from "@/server/imports";
+
+const TAM_PAGINA = 50;
 
 // ─────────────────────────────────────────────
 // Config importación CSV de pagos
@@ -164,6 +167,9 @@ export function CobranzaTable({
   const [sortKey, setSortKey] = useState<SortKey>("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pagina, setPagina] = useState(1);
+  const [detalle, setDetalle] = useState<DetalleNegocio | null>(null);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
 
   const filtrados = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -209,7 +215,7 @@ export function CobranzaTable({
     return rows;
   }, [negocios, q, fVenta, fNegocio, fEstado, fCobranzas, sortKey, sortDir, soloPendientes]);
 
-  // Totalizadores (reaccionan a filtros)
+  // Totalizadores (reaccionan a filtros, sobre el total filtrado — no solo la página visible)
   const totales = useMemo(
     () => ({
       monto:  filtrados.reduce((s, n) => s + n.montoNegocio, 0),
@@ -219,9 +225,38 @@ export function CobranzaTable({
     [filtrados],
   );
 
+  // Resetear a página 1 cuando cambian filtros/búsqueda
+  useEffect(() => {
+    setPagina(1);
+  }, [q, fVenta, fNegocio, fEstado, fCobranzas, soloPendientes]);
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / TAM_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const visibles = filtrados.slice(
+    (paginaSegura - 1) * TAM_PAGINA,
+    paginaSegura * TAM_PAGINA,
+  );
+
   const seleccionado = selectedId
     ? negocios.find((n) => n.recordId === selectedId) ?? null
     : null;
+
+  // Detalle (pagos/OCs/documentos) del negocio abierto en el panel — bajo demanda
+  const cargarDetalle = useCallback((recordId: string) => {
+    setCargandoDetalle(true);
+    getDetalleNegocio(recordId)
+      .then((d) => setDetalle(d))
+      .finally(() => setCargandoDetalle(false));
+  }, []);
+
+  useEffect(() => {
+    if (selectedId) {
+      setDetalle(null);
+      cargarDetalle(selectedId);
+    } else {
+      setDetalle(null);
+    }
+  }, [selectedId, cargarDetalle]);
 
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -353,7 +388,7 @@ export function CobranzaTable({
                 </td>
               </tr>
             )}
-            {filtrados.map((n) => (
+            {visibles.map((n) => (
               <tr
                 key={n.recordId}
                 className={cn(
@@ -414,9 +449,33 @@ export function CobranzaTable({
         </table>
       </div>
 
-      <p className="mt-3 text-xs text-slate-400">
-        {filtrados.length} de {negocios.length} negocios
-      </p>
+      {/* ── Paginación ── */}
+      <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+        <span>
+          {filtrados.length} de {negocios.length} negocios
+          {totalPaginas > 1 ? ` · página ${paginaSegura} de ${totalPaginas}` : ""}
+        </span>
+        {totalPaginas > 1 && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={paginaSegura <= 1}
+              onClick={() => setPagina((p) => Math.max(1, p - 1))}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              disabled={paginaSegura >= totalPaginas}
+              onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+            >
+              Siguiente
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Panel lateral */}
       <Drawer
@@ -432,6 +491,9 @@ export function CobranzaTable({
         {seleccionado && (
           <PanelNegocio
             negocio={seleccionado}
+            detalle={detalle}
+            cargando={cargandoDetalle}
+            onRefrescar={() => cargarDetalle(seleccionado.recordId)}
             puedeEliminar={puedeEliminar}
             tiposDocto={opciones.tiposDocto}
           />

@@ -61,9 +61,8 @@ export interface NegocioCobranza {
   codPrograma: string;
   programaDescripcion: string;
   vendedorNombre: string | null;
-  pagos: PagoView[];
-  ordenes: OCView[];
-  documentos: DocView[];
+  /** Cantidad de OCs (el detalle completo se trae bajo demanda vía getDetalleNegocio) */
+  ordenesCount: number;
   totalOC: number;
 }
 
@@ -78,23 +77,37 @@ function nombreCompleto(a: {
     .join(" ");
 }
 
-/** Devuelve todos los negocios con su resumen de cobranza, pagos, OCs y documentos. */
+/**
+ * Devuelve todos los negocios con su resumen de cobranza (pagado/saldo/estado) usando
+ * agregados en vez de traer cada pago/OC/documento completo — con miles de negocios,
+ * incluir las relaciones 1-N completas es prohibitivamente lento. El detalle completo
+ * de un negocio puntual se trae bajo demanda vía getDetalleNegocio().
+ */
 export async function getNegociosCobranza(): Promise<NegocioCobranza[]> {
-  const negocios = await prisma.negocio.findMany({
-    orderBy: { fechaCreacion: "desc" },
-    include: {
-      alumno: true,
-      programa: true,
-      vendedor: true,
-      pagos: { orderBy: { fechaPago: "desc" } },
-      ordenesCompra: { orderBy: { createdAt: "asc" } },
-      documentos: { orderBy: { createdAt: "desc" } },
-    },
-  });
+  const [negocios, pagosPorNegocio, ocsPorNegocio, recordIdsConDocumento] = await Promise.all([
+    prisma.negocio.findMany({
+      orderBy: { fechaCreacion: "desc" },
+      include: { alumno: true, programa: true, vendedor: true },
+    }),
+    prisma.pago.groupBy({ by: ["recordId"], _sum: { montoPago: true } }),
+    prisma.ordenCompra.groupBy({ by: ["recordId"], _sum: { monto: true }, _count: { _all: true } }),
+    prisma.documentoTributario.findMany({ distinct: ["recordId"], select: { recordId: true } }),
+  ]);
+
+  const totalPagadoPorRecordId = new Map(
+    pagosPorNegocio.map((p) => [p.recordId, toNumber(p._sum.montoPago)]),
+  );
+  const ocPorRecordId = new Map(
+    ocsPorNegocio.map((o) => [o.recordId, { total: toNumber(o._sum.monto), count: o._count._all }]),
+  );
+  const conDocumento = new Set(recordIdsConDocumento.map((d) => d.recordId));
 
   return negocios.map((n) => {
-    const resumen = resumenCobranza(n.montoNegocio, n.pagos);
-    const totalOC = n.ordenesCompra.reduce((acc, oc) => acc + toNumber(oc.monto), 0);
+    const totalPagado = totalPagadoPorRecordId.get(n.recordId) ?? 0;
+    const resumen = resumenCobranza(n.montoNegocio, totalPagado);
+    const oc = ocPorRecordId.get(n.recordId);
+    const totalOC = oc?.total ?? 0;
+    const ordenesCount = oc?.count ?? 0;
     const ocDescubierta = n.tipoDocto === "ORDEN_COMPRA" && totalOC < resumen.montoNegocio;
 
     return {
@@ -110,7 +123,7 @@ export async function getNegociosCobranza(): Promise<NegocioCobranza[]> {
       saldo: resumen.saldo,
       porcentaje: resumen.porcentaje,
       estadoCobranza: resumen.estadoCobranza,
-      tieneDocumento: n.documentos.length > 0,
+      tieneDocumento: conDocumento.has(n.recordId),
       esSence: n.tipoVenta === "SENCE",
       ocDescubierta,
       codPrograma: n.codPrograma,
@@ -124,32 +137,7 @@ export async function getNegociosCobranza(): Promise<NegocioCobranza[]> {
         telefono: n.alumno.telefono,
         direccion: n.alumno.direccion,
       },
-      pagos: n.pagos.map((p) => ({
-        id: p.id,
-        fechaPago: p.fechaPago.toISOString(),
-        montoPago: toNumber(p.montoPago),
-        medioPago: p.medioPago,
-        referencia: p.referencia,
-        observacion: p.observacion,
-      })),
-      ordenes: n.ordenesCompra.map((oc) => ({
-        id: oc.id,
-        tipoOC: oc.tipoOC,
-        numeroOC: oc.numeroOC,
-        entidadNombre: oc.entidadNombre,
-        entidadRut: oc.entidadRut,
-        monto: toNumber(oc.monto),
-        fechaOC: oc.fechaOC ? oc.fechaOC.toISOString() : null,
-        estadoOC: oc.estadoOC,
-        observacion: oc.observacion,
-      })),
-      documentos: n.documentos.map((d) => ({
-        id: d.id,
-        tipoDocto: d.tipoDocto,
-        folio: d.folio,
-        fechaEmision: d.fechaEmision ? d.fechaEmision.toISOString() : null,
-        monto: d.monto !== null ? toNumber(d.monto) : null,
-      })),
+      ordenesCount,
       totalOC,
     };
   });

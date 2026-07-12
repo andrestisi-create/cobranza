@@ -22,45 +22,42 @@ export default async function NegociosPage() {
   const session = await auth();
   const puedeGestionar = session?.user?.rol !== "COBRADOR";
 
-  const [negocios, alumnos, programas, vendedores, opciones] = await Promise.all([
+  const [negocios, alumnos, programas, vendedores, opciones, ocsPorNegocio] = await Promise.all([
     prisma.negocio.findMany({
       orderBy: { fechaCreacion: "desc" },
-      include: {
-        alumno: true,
-        vendedor: true,
-        ordenesCompra: { orderBy: { createdAt: "asc" } },
-      },
+      include: { alumno: true, vendedor: true },
     }),
     prisma.alumno.findMany({ orderBy: { apellidoPaterno: "asc" } }),
     prisma.programa.findMany({ orderBy: { codPrograma: "asc" } }),
     prisma.vendedor.findMany({ where: { activo: true }, orderBy: { nombre: "asc" } }),
     getTodasLasOpciones(),
+    prisma.ordenCompra.groupBy({ by: ["recordId"], _sum: { monto: true }, _count: { _all: true } }),
   ]);
 
-  const rows: NegocioRow[] = negocios.map((n) => ({
-    recordId: n.recordId,
-    idAlumno: n.idAlumno,
-    alumnoNombre: nombre(n.alumno),
-    codPrograma: n.codPrograma,
-    montoNegocio: toNumber(n.montoNegocio),
-    moneda: n.moneda,
-    tipoNegocio: n.tipoNegocio,
-    tipoVenta: n.tipoVenta,
-    tipoDocto: n.tipoDocto,
-    estadoNegocio: n.estadoNegocio,
-    fechaCreacion: n.fechaCreacion.toISOString(),
-    ordenes: n.ordenesCompra.map((oc) => ({
-      id: oc.id,
-      tipoOC: oc.tipoOC,
-      numeroOC: oc.numeroOC,
-      entidadNombre: oc.entidadNombre,
-      entidadRut: oc.entidadRut,
-      monto: toNumber(oc.monto),
-      estadoOC: oc.estadoOC,
-    })),
-    idVendedor: n.idVendedor,
-    vendedorNombre: n.vendedor?.nombre ?? null,
-  }));
+  const ocPorRecordId = new Map(
+    ocsPorNegocio.map((o) => [o.recordId, { total: toNumber(o._sum.monto), count: o._count._all }]),
+  );
+
+  const rows: NegocioRow[] = negocios.map((n) => {
+    const oc = ocPorRecordId.get(n.recordId);
+    return {
+      recordId: n.recordId,
+      idAlumno: n.idAlumno,
+      alumnoNombre: nombre(n.alumno),
+      codPrograma: n.codPrograma,
+      montoNegocio: toNumber(n.montoNegocio),
+      moneda: n.moneda,
+      tipoNegocio: n.tipoNegocio,
+      tipoVenta: n.tipoVenta,
+      tipoDocto: n.tipoDocto,
+      estadoNegocio: n.estadoNegocio,
+      fechaCreacion: n.fechaCreacion.toISOString(),
+      totalOC: oc?.total ?? 0,
+      ordenesCount: oc?.count ?? 0,
+      idVendedor: n.idVendedor,
+      vendedorNombre: n.vendedor?.nombre ?? null,
+    };
+  });
 
   return (
     <div className="p-6">

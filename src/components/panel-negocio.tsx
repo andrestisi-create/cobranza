@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import type { NegocioCobranza } from "@/server/queries";
+import type { DetalleNegocio } from "@/server/detalle";
 import {
   registrarPago,
   crearOrdenCompra,
@@ -28,18 +29,24 @@ function FormAccion({
   action,
   recordId,
   submitLabel,
+  onSuccess,
   children,
 }: {
   action: AccionForm;
   recordId: string;
   submitLabel: string;
+  onSuccess?: () => void;
   children: React.ReactNode;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const ref = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    if (state?.ok) ref.current?.reset();
+    if (state?.ok) {
+      ref.current?.reset();
+      onSuccess?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
   return (
@@ -81,14 +88,28 @@ function Dato({ label, value }: { label: string; value: React.ReactNode }) {
 
 export function PanelNegocio({
   negocio,
+  detalle,
+  cargando,
+  onRefrescar,
   puedeEliminar,
   tiposDocto,
 }: {
   negocio: NegocioCobranza;
+  detalle: DetalleNegocio | null;
+  cargando: boolean;
+  onRefrescar: () => void;
   puedeEliminar: boolean;
   tiposDocto: string[];
 }) {
   const n = negocio;
+  const pagos = detalle?.pagos ?? [];
+  const ordenes = detalle?.ordenes ?? [];
+  const documentos = detalle?.documentos ?? [];
+
+  const eliminarPagoYRefrescar = async (fd: FormData) => {
+    await eliminarPago(fd);
+    onRefrescar();
+  };
 
   return (
     <div>
@@ -153,14 +174,17 @@ export function PanelNegocio({
       </Seccion>
 
       {/* Pagos */}
-      <Seccion titulo={`Pagos (${n.pagos.length})`}>
+      <Seccion titulo={cargando && !detalle ? "Pagos" : `Pagos (${pagos.length})`}>
         <div className="mb-3 space-y-2">
-          {n.pagos.length === 0 && (
+          {cargando && !detalle && (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-400">Cargando…</p>
+          )}
+          {!cargando && pagos.length === 0 && (
             <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-400">
               Sin pagos registrados.
             </p>
           )}
-          {n.pagos.map((p) => (
+          {pagos.map((p) => (
             <div
               key={p.id}
               className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"
@@ -173,7 +197,7 @@ export function PanelNegocio({
                 </div>
               </div>
               {puedeEliminar && (
-                <form action={eliminarPago}>
+                <form action={eliminarPagoYRefrescar}>
                   <input type="hidden" name="id" value={p.id} />
                   <button
                     type="submit"
@@ -188,7 +212,7 @@ export function PanelNegocio({
           ))}
         </div>
 
-        <FormAccion action={registrarPago} recordId={n.recordId} submitLabel="Registrar pago">
+        <FormAccion action={registrarPago} recordId={n.recordId} submitLabel="Registrar pago" onSuccess={onRefrescar}>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={labelCls}>Monto</label>
@@ -220,7 +244,7 @@ export function PanelNegocio({
 
       {/* Órdenes de compra */}
       {(
-        <Seccion titulo={`Órdenes de compra (${n.ordenes.length})`}>
+        <Seccion titulo={`Órdenes de compra (${detalle ? ordenes.length : n.ordenesCount})`}>
           {/* Alerta OC descubierta */}
           {n.ocDescubierta && (
             <div className="mb-2 flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -238,12 +262,15 @@ export function PanelNegocio({
             <span className={`font-bold ${n.ocDescubierta ? "text-red-900" : "text-indigo-900"}`}>{formatCLP(n.totalOC)}</span>
           </div>
           <div className="mb-3 space-y-2">
-            {n.ordenes.length === 0 && (
+            {cargando && !detalle && (
+              <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-400">Cargando…</p>
+            )}
+            {!cargando && ordenes.length === 0 && (
               <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-400">
                 Sin órdenes de compra.
               </p>
             )}
-            {n.ordenes.map((oc) => (
+            {ordenes.map((oc) => (
               <div key={oc.id} className="rounded-lg border border-slate-200 px-3 py-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -262,7 +289,7 @@ export function PanelNegocio({
             ))}
           </div>
 
-          <FormAccion action={crearOrdenCompra} recordId={n.recordId} submitLabel="Agregar OC">
+          <FormAccion action={crearOrdenCompra} recordId={n.recordId} submitLabel="Agregar OC" onSuccess={onRefrescar}>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className={labelCls}>Tipo</label>
@@ -311,17 +338,20 @@ export function PanelNegocio({
       )}
 
       {/* Documentos tributarios */}
-      <Seccion titulo={`Documentos tributarios (${n.documentos.length})`}>
+      <Seccion titulo={cargando && !detalle ? "Documentos tributarios" : `Documentos tributarios (${documentos.length})`}>
         <p className="mb-2 text-xs text-slate-400">
           Informativo. La cobranza se asocia al RecordID, no al documento.
         </p>
         <div className="mb-3 space-y-2">
-          {n.documentos.length === 0 && (
+          {cargando && !detalle && (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-400">Cargando…</p>
+          )}
+          {!cargando && documentos.length === 0 && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
               Sin documento tributario emitido.
             </p>
           )}
-          {n.documentos.map((d) => (
+          {documentos.map((d) => (
             <div
               key={d.id}
               className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"
@@ -337,7 +367,7 @@ export function PanelNegocio({
           ))}
         </div>
 
-        <FormAccion action={registrarDocumento} recordId={n.recordId} submitLabel="Registrar documento">
+        <FormAccion action={registrarDocumento} recordId={n.recordId} submitLabel="Registrar documento" onSuccess={onRefrescar}>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={labelCls}>Tipo</label>
