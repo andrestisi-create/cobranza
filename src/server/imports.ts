@@ -226,10 +226,13 @@ export async function importarNegocios(
   const rutsFaltantes = rutsArchivo.filter((rut) => !alumnoPorRut.has(rut));
   if (rutsFaltantes.length > 0) {
     try {
-      await prisma.alumno.createMany({
-        data: rutsFaltantes.map((rut) => ({ rut, nombre: "", apellidoPaterno: "" })),
-        skipDuplicates: true,
-      });
+      for (let i = 0; i < rutsFaltantes.length; i += 500) {
+        const lote = rutsFaltantes.slice(i, i + 500);
+        await prisma.alumno.createMany({
+          data: lote.map((rut) => ({ rut, nombre: "", apellidoPaterno: "" })),
+          skipDuplicates: true,
+        });
+      }
       const alumnosCreados = await prisma.alumno.findMany({
         where: { rut: { in: rutsFaltantes } },
         select: { idAlumno: true, rut: true },
