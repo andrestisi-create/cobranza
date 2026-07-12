@@ -11,6 +11,24 @@ export function toNumber(value: Numerico): number {
   return Number(value.toString());
 }
 
+/**
+ * Parsea un número escrito con coma o punto decimal (ej. importados de Excel/CSV chileno).
+ * "1234.56" -> 1234.56 · "1234,56" -> 1234.56 · "1.234,56" -> 1234.56 (punto = miles, coma = decimal)
+ */
+export function parseNumero(str: string | null | undefined): number {
+  if (!str) return NaN;
+  let s = str.trim();
+  if (!s) return NaN;
+  const tieneComa = s.includes(",");
+  const tienePunto = s.includes(".");
+  if (tieneComa && tienePunto) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (tieneComa) {
+    s = s.replace(",", ".");
+  }
+  return Number(s);
+}
+
 /** Formatea un monto en pesos chilenos (hasta 2 decimales, sin forzar mostrarlos). */
 export function formatCLP(value: Numerico): string {
   return new Intl.NumberFormat("es-CL", {

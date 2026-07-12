@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import type { ActionState } from "@/lib/types";
 import { getTodasLasOpciones } from "@/server/opciones";
+import { parseNumero } from "@/lib/format";
 
 /** Parsea fechas en YYYY-MM-DD o DD-MM-YYYY. */
 function parseFecha(str: string): Date {
@@ -151,7 +152,7 @@ function extraerOcs(r: Record<string, string>): OcImport[] {
   for (const n of [1, 2, 3] as const) {
     const numero = r[`oc${n}Numero`]?.trim();
     const entidadNombre = r[`oc${n}EntidadNombre`]?.trim();
-    const monto = Number(r[`oc${n}Monto`]?.trim());
+    const monto = parseNumero(r[`oc${n}Monto`]);
     if (!numero || !entidadNombre || !(monto > 0)) continue;
 
     const tipoRaw = r[`oc${n}Tipo`]?.trim().toUpperCase();
@@ -259,7 +260,7 @@ export async function importarNegocios(
           recordId,
           idAlumno: alumno.idAlumno,
           codPrograma: programa.codPrograma,
-          montoNegocio: Number(r.montoNegocio?.trim()),
+          montoNegocio: parseNumero(r.montoNegocio),
           moneda: moneda as "CLP" | "PEN" | "USD",
           tipoNegocio,
           tipoVenta,
@@ -346,7 +347,7 @@ export async function importarPagos(
         continue;
       }
 
-      const monto = Number(r.montoPago?.trim());
+      const monto = parseNumero(r.montoPago);
       if (!monto || monto <= 0) {
         errores.push({ fila, mensaje: "Monto de pago inválido" });
         continue;
@@ -387,7 +388,7 @@ export async function importarPagos(
               ? parseFecha(r.fechaDocto.trim())
               : null,
             monto: r.montoDocto?.trim()
-              ? Number(r.montoDocto.trim())
+              ? parseNumero(r.montoDocto)
               : monto,
           },
         });

@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import type { ActionState, ResultadoImport } from "@/lib/types";
+import { parseNumero } from "@/lib/format";
 
 // ─────────────────────────────────────────────
 // Tipos
@@ -147,7 +148,7 @@ function parsearCSV(
       } else if (
         valor &&
         col.tipo === "numero" &&
-        (isNaN(Number(valor)) || Number(valor) <= 0)
+        (isNaN(parseNumero(valor)) || parseNumero(valor) <= 0)
       ) {
         erroresValidacion.push({
           fila: i + 1,
@@ -352,7 +353,7 @@ export function ImportCSV({
                       (c.tipo === "fecha"
                         ? "YYYY-MM-DD"
                         : c.tipo === "numero"
-                          ? "Número entero positivo"
+                          ? "Número positivo (admite decimales, con coma o punto)"
                           : "Texto libre")}
                 </td>
               </tr>
