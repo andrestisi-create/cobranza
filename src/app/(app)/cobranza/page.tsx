@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { getNegociosCobranza } from "@/server/queries";
+import { getTodasLasOpciones } from "@/server/opciones";
 import { CobranzaTable } from "@/components/cobranza-table";
 import { PageHeader } from "@/components/page-header";
 
@@ -11,7 +12,10 @@ export default async function CobranzaPage() {
   const puedeEliminar  = rol === "ADMIN" || rol === "SUPERVISOR";
   const puedeGestionar = rol === "ADMIN" || rol === "SUPERVISOR";
 
-  const negocios = await getNegociosCobranza();
+  const [negocios, opciones] = await Promise.all([
+    getNegociosCobranza(),
+    getTodasLasOpciones(),
+  ]);
 
   return (
     <div className="p-6">
@@ -23,6 +27,7 @@ export default async function CobranzaPage() {
         negocios={negocios}
         puedeEliminar={puedeEliminar}
         puedeGestionar={puedeGestionar}
+        opciones={opciones}
       />
     </div>
   );

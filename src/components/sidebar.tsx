@@ -15,6 +15,7 @@ const NAV: NavItem[] = [
   { href: "/programas", label: "Programas" },
   { href: "/vendedores", label: "Vendedores" },
   { href: "/usuarios", label: "Usuarios", soloAdmin: true },
+  { href: "/configuracion", label: "Configuración", soloAdmin: true },
 ];
 
 export function Sidebar({ esAdmin }: { esAdmin: boolean }) {

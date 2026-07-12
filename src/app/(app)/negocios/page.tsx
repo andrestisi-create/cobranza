@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { toNumber } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { NegociosManager, type NegocioRow } from "@/components/negocios-manager";
+import { getTodasLasOpciones } from "@/server/opciones";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export default async function NegociosPage() {
   const session = await auth();
   const puedeGestionar = session?.user?.rol !== "COBRADOR";
 
-  const [negocios, alumnos, programas, vendedores] = await Promise.all([
+  const [negocios, alumnos, programas, vendedores, opciones] = await Promise.all([
     prisma.negocio.findMany({
       orderBy: { fechaCreacion: "desc" },
       include: {
@@ -33,6 +34,7 @@ export default async function NegociosPage() {
     prisma.alumno.findMany({ orderBy: { apellidoPaterno: "asc" } }),
     prisma.programa.findMany({ orderBy: { codPrograma: "asc" } }),
     prisma.vendedor.findMany({ where: { activo: true }, orderBy: { nombre: "asc" } }),
+    getTodasLasOpciones(),
   ]);
 
   const rows: NegocioRow[] = negocios.map((n) => ({
@@ -41,6 +43,7 @@ export default async function NegociosPage() {
     alumnoNombre: nombre(n.alumno),
     codPrograma: n.codPrograma,
     montoNegocio: toNumber(n.montoNegocio),
+    moneda: n.moneda,
     tipoNegocio: n.tipoNegocio,
     tipoVenta: n.tipoVenta,
     tipoDocto: n.tipoDocto,
@@ -77,6 +80,7 @@ export default async function NegociosPage() {
           descripcion: p.descripcion,
         }))}
         vendedores={vendedores.map((v) => ({ id: v.id, nombre: v.nombre }))}
+        opciones={opciones}
         puedeGestionar={puedeGestionar}
       />
     </div>

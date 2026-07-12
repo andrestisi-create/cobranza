@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { getNegociosCobranza } from "@/server/queries";
+import { getTodasLasOpciones } from "@/server/opciones";
 import { CobranzaTable } from "@/components/cobranza-table";
 import { PageHeader } from "@/components/page-header";
 
@@ -10,7 +11,10 @@ export default async function PreCobranzaPage() {
   const rol = session?.user?.rol;
   const puedeEliminar = rol === "ADMIN" || rol === "SUPERVISOR";
 
-  const negocios = await getNegociosCobranza();
+  const [negocios, opciones] = await Promise.all([
+    getNegociosCobranza(),
+    getTodasLasOpciones(),
+  ]);
   const pendientes = negocios.filter((n) => n.esSence && !n.tieneDocumento);
 
   return (
@@ -23,7 +27,7 @@ export default async function PreCobranzaPage() {
         <span className="font-bold">{pendientes.length}</span>
         ventas Sence pendientes de documento tributario
       </div>
-      <CobranzaTable negocios={negocios} puedeEliminar={puedeEliminar} soloPendientes />
+      <CobranzaTable negocios={negocios} puedeEliminar={puedeEliminar} soloPendientes opciones={opciones} />
     </div>
   );
 }

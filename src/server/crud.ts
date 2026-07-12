@@ -141,10 +141,11 @@ const negocioSchema = z.object({
   idAlumno: z.string().min(1, "Selecciona un alumno"),
   codPrograma: z.string().min(1, "Selecciona un programa"),
   montoNegocio: z.coerce.number().positive("Monto inválido"),
-  tipoNegocio: z.enum(["CORPORATIVO", "RETAIL"]),
-  tipoVenta: z.enum(["SENCE", "NO_SENCE"]),
-  tipoDocto: z.enum(["FACTURA", "BOLETA", "ORDEN_COMPRA"]),
-  estadoNegocio: z.enum(["MATRICULADO", "DE_BAJA", "DESISTE"]),
+  moneda: z.enum(["CLP", "PEN", "USD"]),
+  tipoNegocio: z.string().min(1, "Selecciona un tipo de negocio"),
+  tipoVenta: z.string().min(1, "Selecciona un tipo de venta"),
+  tipoDocto: z.string().min(1, "Selecciona un tipo de documento"),
+  estadoNegocio: z.string().min(1, "Selecciona un estado"),
 });
 
 // ----------------- Vendedores -----------------
@@ -230,6 +231,7 @@ export async function crearNegocio(
         idAlumno: d.idAlumno,
         codPrograma: d.codPrograma,
         montoNegocio: d.montoNegocio,
+        moneda: d.moneda,
         tipoNegocio: d.tipoNegocio,
         tipoVenta: d.tipoVenta,
         tipoDocto: d.tipoDocto,
@@ -279,6 +281,7 @@ export async function actualizarNegocio(
         idAlumno: d.idAlumno,
         codPrograma: d.codPrograma,
         montoNegocio: d.montoNegocio,
+        moneda: d.moneda,
         tipoNegocio: d.tipoNegocio,
         tipoVenta: d.tipoVenta,
         tipoDocto: d.tipoDocto,
@@ -311,7 +314,7 @@ export async function actualizarNegocio(
 
 export async function actualizarEstadoNegocio(fd: FormData): Promise<void> {
   await requireGestion();
-  const estado = String(fd.get("estadoNegocio")) as "MATRICULADO" | "DE_BAJA" | "DESISTE";
+  const estado = String(fd.get("estadoNegocio"));
   await prisma.negocio.update({
     where: { recordId: String(fd.get("id")) },
     data: { estadoNegocio: estado },

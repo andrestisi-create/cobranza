@@ -2,7 +2,8 @@
 
 import { useMemo, useRef, useEffect, useState } from "react";
 import type { NegocioCobranza } from "@/server/queries";
-import { formatCLP, formatFecha, etiqueta, cn } from "@/lib/format";
+import type { TodasLasOpciones } from "@/server/opciones";
+import { formatCLP, formatMonto, formatFecha, etiqueta, cn } from "@/lib/format";
 import {
   EstadoNegocioBadge,
   EstadoCobranzaBadge,
@@ -18,19 +19,19 @@ import { importarPagos } from "@/server/imports";
 // Config importación CSV de pagos
 // ─────────────────────────────────────────────
 
-const COLUMNAS_PAGOS: ColConfig[] = [
+function getColumnasPagos(tiposDocto: string[]): ColConfig[] { return [
   { campo: "recordId",    label: "Record ID",           requerido: true,  tipo: "numero",  descripcion: "11 dígitos; el negocio debe existir en el sistema" },
-  { campo: "montoPago",   label: "Monto pago (CLP)",    requerido: true,  tipo: "numero" },
+  { campo: "montoPago",   label: "Monto pago",          requerido: true,  tipo: "numero" },
   { campo: "fechaPago",   label: "Fecha pago",          requerido: false, tipo: "fecha",   descripcion: "YYYY-MM-DD. Vacío = fecha de hoy" },
   { campo: "medioPago",   label: "Medio de pago",       requerido: false, valoresPermitidos: ["TRANSFERENCIA","WEBPAY","MERCADOPAGO_LINK","MERCADOPAGO_TARJETA","CHEQUE","EFECTIVO","OTRO"], descripcion: "Vacío = TRANSFERENCIA" },
   { campo: "referencia",  label: "Referencia",          requerido: false, descripcion: "N° transferencia, cheque, etc." },
   { campo: "observacion", label: "Observación",         requerido: false },
   // ── Documento tributario opcional ──────────────────────────────────────────
-  { campo: "tipoDocto",   label: "Tipo documento",      requerido: false, valoresPermitidos: ["FACTURA","BOLETA","ORDEN_COMPRA"], descripcion: "Si se indica, se registra el documento asociado al negocio" },
+  { campo: "tipoDocto",   label: "Tipo documento",      requerido: false, valoresPermitidos: tiposDocto, descripcion: "Si se indica, se registra el documento asociado al negocio" },
   { campo: "folioDocto",  label: "Folio documento",     requerido: false, descripcion: "N° boleta, factura o folio de OC" },
   { campo: "fechaDocto",  label: "Fecha emisión doc.",  requerido: false, tipo: "fecha",   descripcion: "Vacío = sin fecha registrada" },
   { campo: "montoDocto",  label: "Monto documento",     requerido: false, tipo: "numero",  descripcion: "Vacío = mismo monto que el pago" },
-];
+]; }
 
 type SortKey = "fecha" | "alumno" | "monto" | "pagado" | "saldo";
 
@@ -147,11 +148,13 @@ export function CobranzaTable({
   puedeEliminar,
   puedeGestionar = false,
   soloPendientes = false,
+  opciones,
 }: {
   negocios: NegocioCobranza[];
   puedeEliminar: boolean;
   puedeGestionar?: boolean;
   soloPendientes?: boolean;
+  opciones: TodasLasOpciones;
 }) {
   const [q, setQ] = useState("");
   const [fVenta, setFVenta] = useState("");
@@ -254,7 +257,7 @@ export function CobranzaTable({
           <ImportCSV
             titulo="Importar pagos masivos"
             ejemploUrl="/ejemplos/pagos_ejemplo.csv"
-            columnas={COLUMNAS_PAGOS}
+            columnas={getColumnasPagos(opciones.tiposDocto)}
             action={importarPagos}
           />
         </div>
@@ -296,8 +299,9 @@ export function CobranzaTable({
           className={selectCls}
         >
           <option value="">Venta: todas</option>
-          <option value="SENCE">Sence</option>
-          <option value="NO_SENCE">No Sence</option>
+          {opciones.tiposVenta.map((v) => (
+            <option key={v} value={v}>{etiqueta(v)}</option>
+          ))}
         </select>
         <select
           value={fNegocio}
@@ -305,8 +309,9 @@ export function CobranzaTable({
           className={selectCls}
         >
           <option value="">Tipo: todos</option>
-          <option value="CORPORATIVO">Corporativo</option>
-          <option value="RETAIL">Retail</option>
+          {opciones.tiposNegocio.map((v) => (
+            <option key={v} value={v}>{etiqueta(v)}</option>
+          ))}
         </select>
         <select
           value={fEstado}
@@ -314,9 +319,9 @@ export function CobranzaTable({
           className={selectCls}
         >
           <option value="">Estado: todos</option>
-          <option value="MATRICULADO">Matriculado</option>
-          <option value="DE_BAJA">De Baja</option>
-          <option value="DESISTE">Desiste</option>
+          {opciones.estadosNegocio.map((v) => (
+            <option key={v} value={v}>{etiqueta(v)}</option>
+          ))}
         </select>
         <FiltroCobranza seleccionados={fCobranzas} onChange={setFCobranzas} />
       </div>
@@ -370,13 +375,18 @@ export function CobranzaTable({
                 <td className="px-3 py-2"><TipoVentaBadge tipo={n.tipoVenta} /></td>
                 <td className="px-3 py-2"><EstadoNegocioBadge estado={n.estadoNegocio} /></td>
                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                  {formatCLP(n.montoNegocio)}
+                  {formatMonto(n.montoNegocio, n.moneda)}
+                  {n.moneda !== "CLP" && (
+                    <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-semibold text-slate-500">
+                      {n.moneda}
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums text-emerald-600">
-                  {formatCLP(n.totalPagado)}
+                  {formatMonto(n.totalPagado, n.moneda)}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums font-medium text-slate-900">
-                  {formatCLP(n.saldo)}
+                  {formatMonto(n.saldo, n.moneda)}
                 </td>
                 <td className="px-3 py-2"><EstadoCobranzaBadge estado={n.estadoCobranza} /></td>
                 <td className="px-3 py-2 text-center">
@@ -420,7 +430,11 @@ export function CobranzaTable({
         }
       >
         {seleccionado && (
-          <PanelNegocio negocio={seleccionado} puedeEliminar={puedeEliminar} />
+          <PanelNegocio
+            negocio={seleccionado}
+            puedeEliminar={puedeEliminar}
+            tiposDocto={opciones.tiposDocto}
+          />
         )}
       </Drawer>
     </div>

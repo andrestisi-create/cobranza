@@ -124,7 +124,7 @@ export async function eliminarOrdenCompra(formData: FormData): Promise<void> {
 
 const docSchema = z.object({
   recordId: z.string().min(1),
-  tipoDocto: z.enum(["FACTURA", "BOLETA", "ORDEN_COMPRA"]),
+  tipoDocto: z.string().min(1, "Selecciona un tipo de documento"),
   folio: z.string().optional(),
   fechaEmision: z.string().optional(),
   monto: z.coerce.number().optional(),

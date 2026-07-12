@@ -20,6 +20,22 @@ export function formatCLP(value: Numerico): string {
   }).format(toNumber(value));
 }
 
+const MONEDA_CONFIG: Record<string, { locale: string; currency: string; decimales: number }> = {
+  CLP: { locale: "es-CL", currency: "CLP", decimales: 0 },
+  PEN: { locale: "es-PE", currency: "PEN", decimales: 2 },
+  USD: { locale: "en-US", currency: "USD", decimales: 2 },
+};
+
+/** Formatea un monto según la moneda del negocio (CLP/PEN/USD). Sin conversión de tipo de cambio. */
+export function formatMonto(value: Numerico, moneda: string | null | undefined): string {
+  const cfg = MONEDA_CONFIG[moneda ?? "CLP"] ?? MONEDA_CONFIG.CLP;
+  return new Intl.NumberFormat(cfg.locale, {
+    style: "currency",
+    currency: cfg.currency,
+    maximumFractionDigits: cfg.decimales,
+  }).format(toNumber(value));
+}
+
 /** Formatea una fecha en formato dd-mm-yyyy. */
 export function formatFecha(value: Date | string | null | undefined): string {
   if (!value) return "—";
@@ -70,6 +86,10 @@ const ETIQUETAS: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TARJETA: "Tarjeta (legado)",
   OTRO: "Otro",
+  // Moneda
+  CLP: "Pesos (CLP)",
+  PEN: "Soles (PEN)",
+  USD: "Dólares (USD)",
   // Roles
   ADMIN: "Administrador",
   SUPERVISOR: "Supervisor",

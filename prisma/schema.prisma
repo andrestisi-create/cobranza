@@ -19,26 +19,10 @@ enum RolUsuario {
   COBRADOR
 }
 
-enum EstadoNegocio {
-  MATRICULADO
-  DE_BAJA
-  DESISTE
-}
-
-enum TipoNegocio {
-  CORPORATIVO
-  RETAIL
-}
-
-enum TipoVenta {
-  SENCE
-  NO_SENCE
-}
-
-enum TipoDocto {
-  FACTURA
-  BOLETA
-  ORDEN_COMPRA
+enum Moneda {
+  CLP
+  PEN
+  USD
 }
 
 enum TipoOC {
@@ -112,6 +96,20 @@ model Programa {
   @@map("programas")
 }
 
+/// Datos maestros configurables: Estado de Negocio, Tipo de Negocio, Tipo de Venta, Tipo de Documento.
+/// `valor` es a la vez el dato guardado en Negocio y el texto mostrado (sin traducción separada).
+model OpcionCatalogo {
+  id        String   @id @default(cuid())
+  catalogo  String   // ESTADO_NEGOCIO | TIPO_NEGOCIO | TIPO_VENTA | TIPO_DOCTO
+  valor     String
+  activo    Boolean  @default(true)
+  orden     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([catalogo, valor])
+  @@map("opciones_catalogo")
+}
+
 model Vendedor {
   id        String    @id @default(cuid())
   nombre    String
@@ -132,11 +130,12 @@ model Negocio {
   codPrograma   String
   idVendedor    String?
   fechaCreacion DateTime      @default(now())
-  estadoNegocio EstadoNegocio @default(MATRICULADO)
+  estadoNegocio String        @default("MATRICULADO")
   montoNegocio  Decimal       @db.Decimal(14, 0)
-  tipoNegocio   TipoNegocio
-  tipoVenta     TipoVenta
-  tipoDocto     TipoDocto
+  moneda        Moneda        @default(CLP)
+  tipoNegocio   String
+  tipoVenta     String
+  tipoDocto     String
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -200,7 +199,7 @@ model Pago {
 model DocumentoTributario {
   id          String    @id @default(cuid())
   recordId    String
-  tipoDocto   TipoDocto
+  tipoDocto   String
   folio       String?
   fechaEmision DateTime?
   monto       Decimal?  @db.Decimal(14, 0)

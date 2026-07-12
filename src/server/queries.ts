@@ -48,6 +48,7 @@ export interface NegocioCobranza {
   tipoVenta: string;
   tipoDocto: string;
   montoNegocio: number;
+  moneda: string;
   totalPagado: number;
   saldo: number;
   porcentaje: number;
@@ -104,6 +105,7 @@ export async function getNegociosCobranza(): Promise<NegocioCobranza[]> {
       tipoVenta: n.tipoVenta,
       tipoDocto: n.tipoDocto,
       montoNegocio: resumen.montoNegocio,
+      moneda: n.moneda,
       totalPagado: resumen.totalPagado,
       saldo: resumen.saldo,
       porcentaje: resumen.porcentaje,

@@ -12,8 +12,17 @@ import { importarNegocios } from "@/server/imports";
 import { ImportCSV, type ColConfig } from "@/components/import-csv";
 import { Combobox, type OpcionCombobox } from "@/components/combobox";
 import type { ActionState } from "@/lib/types";
-import { formatCLP, etiqueta, formatFecha, toNumber } from "@/lib/format";
+import type { TodasLasOpciones } from "@/server/opciones";
+import { formatCLP, formatMonto, etiqueta, formatFecha, toNumber } from "@/lib/format";
 import { TipoVentaBadge } from "@/components/badges";
+
+const MONEDAS = ["CLP", "PEN", "USD"] as const;
+
+/** Asegura que el valor actual del negocio aparezca en el <select> aunque haya sido desactivado. */
+function conValorActual(activos: string[], valorActual: string | undefined): string[] {
+  if (!valorActual || activos.includes(valorActual)) return activos;
+  return [valorActual, ...activos];
+}
 
 // ─────────────────────────────────────────────
 // Tipos
@@ -35,6 +44,7 @@ export interface NegocioRow {
   alumnoNombre: string;
   codPrograma: string;
   montoNegocio: number;
+  moneda: string;
   tipoNegocio: string;
   tipoVenta: string;
   tipoDocto: string;
@@ -59,15 +69,16 @@ interface OcPendiente {
 // Config importación CSV
 // ─────────────────────────────────────────────
 
-const COLUMNAS_NEGOCIOS: ColConfig[] = [
+function getColumnasNegocios(opciones: TodasLasOpciones): ColConfig[] { return [
   { campo: "recordId",     label: "Record ID",       requerido: true,  tipo: "numero", descripcion: "Número de 11 dígitos sin puntos ni guiones. Ej: 60178145390" },
   { campo: "rutAlumno",    label: "RUT del alumno",  requerido: true,  descripcion: "El alumno debe existir en el sistema con ese RUT" },
   { campo: "codPrograma",  label: "Código programa", requerido: true,  descripcion: "El programa debe existir en el sistema" },
-  { campo: "montoNegocio", label: "Monto (CLP)",     requerido: true,  tipo: "numero" },
-  { campo: "tipoNegocio",  label: "Tipo negocio",    requerido: true,  valoresPermitidos: ["CORPORATIVO", "RETAIL"] },
-  { campo: "tipoVenta",    label: "Tipo venta",      requerido: true,  valoresPermitidos: ["SENCE", "NO_SENCE"] },
-  { campo: "tipoDocto",    label: "Tipo documento",  requerido: true,  valoresPermitidos: ["FACTURA", "BOLETA", "ORDEN_COMPRA"] },
-  { campo: "estadoNegocio",label: "Estado",          requerido: false, valoresPermitidos: ["MATRICULADO", "DE_BAJA", "DESISTE"], descripcion: "Vacío = MATRICULADO" },
+  { campo: "montoNegocio", label: "Monto",           requerido: true,  tipo: "numero" },
+  { campo: "moneda",       label: "Moneda",          requerido: false, valoresPermitidos: [...MONEDAS], descripcion: "Vacío = CLP" },
+  { campo: "tipoNegocio",  label: "Tipo negocio",    requerido: true,  valoresPermitidos: opciones.tiposNegocio },
+  { campo: "tipoVenta",    label: "Tipo venta",      requerido: true,  valoresPermitidos: opciones.tiposVenta },
+  { campo: "tipoDocto",    label: "Tipo documento",  requerido: true,  valoresPermitidos: opciones.tiposDocto },
+  { campo: "estadoNegocio",label: "Estado",          requerido: false, valoresPermitidos: opciones.estadosNegocio, descripcion: "Vacío = MATRICULADO" },
   // ── Orden de Compra 1 ──────────────────────────────────────────────────────
   { campo: "oc1Tipo",          label: "OC 1 - Tipo",         requerido: false, valoresPermitidos: ["OTIC","OTEC","EMPRESA"], descripcion: "Primera OC (opcional)" },
   { campo: "oc1Numero",        label: "OC 1 - N° OC",        requerido: false },
@@ -86,7 +97,7 @@ const COLUMNAS_NEGOCIOS: ColConfig[] = [
   { campo: "oc3EntidadNombre", label: "OC 3 - Entidad",      requerido: false },
   { campo: "oc3EntidadRut",    label: "OC 3 - RUT entidad",  requerido: false },
   { campo: "oc3Monto",         label: "OC 3 - Monto (CLP)",  requerido: false, tipo: "numero" },
-];
+]; }
 
 // ─────────────────────────────────────────────
 // Estilos
@@ -339,12 +350,14 @@ function FormNegocio({
   opcionesAlumno,
   opcionesPrograma,
   opcionesVendedor,
+  opciones,
   onCancel,
 }: {
   editing: NegocioRow | null;
   opcionesAlumno: OpcionCombobox[];
   opcionesPrograma: OpcionCombobox[];
   opcionesVendedor: OpcionCombobox[];
+  opciones: TodasLasOpciones;
   onCancel: () => void;
 }) {
   const esEdicion = editing !== null;
@@ -437,7 +450,7 @@ function FormNegocio({
         </div>
 
         <div>
-          <label className={labelCls}>Monto (CLP) *</label>
+          <label className={labelCls}>Monto *</label>
           <input
             name="montoNegocio"
             type="number"
@@ -451,14 +464,28 @@ function FormNegocio({
         </div>
 
         <div>
+          <label className={labelCls}>Moneda *</label>
+          <select
+            name="moneda"
+            className={inputCls}
+            defaultValue={editing?.moneda ?? "CLP"}
+          >
+            {MONEDAS.map((m) => (
+              <option key={m} value={m}>{etiqueta(m)}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
           <label className={labelCls}>Tipo negocio *</label>
           <select
             name="tipoNegocio"
             className={inputCls}
-            defaultValue={editing?.tipoNegocio ?? "RETAIL"}
+            defaultValue={editing?.tipoNegocio ?? opciones.tiposNegocio[0] ?? ""}
           >
-            <option value="CORPORATIVO">Corporativo</option>
-            <option value="RETAIL">Retail</option>
+            {conValorActual(opciones.tiposNegocio, editing?.tipoNegocio).map((v) => (
+              <option key={v} value={v}>{etiqueta(v)}</option>
+            ))}
           </select>
         </div>
 
@@ -467,10 +494,11 @@ function FormNegocio({
           <select
             name="tipoVenta"
             className={inputCls}
-            defaultValue={editing?.tipoVenta ?? "NO_SENCE"}
+            defaultValue={editing?.tipoVenta ?? opciones.tiposVenta[0] ?? ""}
           >
-            <option value="SENCE">Sence</option>
-            <option value="NO_SENCE">No Sence</option>
+            {conValorActual(opciones.tiposVenta, editing?.tipoVenta).map((v) => (
+              <option key={v} value={v}>{etiqueta(v)}</option>
+            ))}
           </select>
         </div>
 
@@ -479,11 +507,11 @@ function FormNegocio({
           <select
             name="tipoDocto"
             className={inputCls}
-            defaultValue={editing?.tipoDocto ?? "BOLETA"}
+            defaultValue={editing?.tipoDocto ?? opciones.tiposDocto[0] ?? ""}
           >
-            <option value="FACTURA">Factura</option>
-            <option value="BOLETA">Boleta</option>
-            <option value="ORDEN_COMPRA">Orden de Compra</option>
+            {conValorActual(opciones.tiposDocto, editing?.tipoDocto).map((v) => (
+              <option key={v} value={v}>{etiqueta(v)}</option>
+            ))}
           </select>
         </div>
 
@@ -492,11 +520,11 @@ function FormNegocio({
           <select
             name="estadoNegocio"
             className={inputCls}
-            defaultValue={editing?.estadoNegocio ?? "MATRICULADO"}
+            defaultValue={editing?.estadoNegocio ?? opciones.estadosNegocio[0] ?? "MATRICULADO"}
           >
-            <option value="MATRICULADO">Matriculado</option>
-            <option value="DE_BAJA">De Baja</option>
-            <option value="DESISTE">Desiste</option>
+            {conValorActual(opciones.estadosNegocio, editing?.estadoNegocio).map((v) => (
+              <option key={v} value={v}>{etiqueta(v)}</option>
+            ))}
           </select>
         </div>
 
@@ -556,12 +584,14 @@ export function NegociosManager({
   alumnos,
   programas,
   vendedores,
+  opciones,
   puedeGestionar,
 }: {
   negocios: NegocioRow[];
   alumnos: { idAlumno: string; nombre: string; rut: string }[];
   programas: { codPrograma: string; descripcion: string }[];
   vendedores: { id: string; nombre: string }[];
+  opciones: TodasLasOpciones;
   puedeGestionar: boolean;
 }) {
   // Almacena sólo el recordId (o "nuevo") — se deriva la fila viva desde `negocios`
@@ -608,7 +638,7 @@ export function NegociosManager({
               <ImportCSV
                 titulo="Importar negocios desde CSV"
                 ejemploUrl="/ejemplos/negocios_ejemplo.csv"
-                columnas={COLUMNAS_NEGOCIOS}
+                columnas={getColumnasNegocios(opciones)}
                 action={importarNegocios}
               />
             )}
@@ -620,6 +650,7 @@ export function NegociosManager({
               opcionesAlumno={opcionesAlumno}
               opcionesPrograma={opcionesPrograma}
               opcionesVendedor={opcionesVendedor}
+              opciones={opciones}
               onCancel={() => setModoId(null)}
             />
           )}
@@ -679,7 +710,12 @@ export function NegociosManager({
                     {etiqueta(n.tipoDocto)}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                    {formatCLP(n.montoNegocio)}
+                    {formatMonto(n.montoNegocio, n.moneda)}
+                    {n.moneda !== "CLP" && (
+                      <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 text-[10px] font-semibold text-slate-500">
+                        {n.moneda}
+                      </span>
+                    )}
                   </td>
                   {/* Columna OC */}
                   <td className="px-3 py-2 text-center">
@@ -724,9 +760,9 @@ export function NegociosManager({
                           }
                           className="rounded-lg border border-slate-300 px-2 py-1 text-xs outline-none focus:border-slate-900"
                         >
-                          <option value="MATRICULADO">Matriculado</option>
-                          <option value="DE_BAJA">De Baja</option>
-                          <option value="DESISTE">Desiste</option>
+                          {conValorActual(opciones.estadosNegocio, n.estadoNegocio).map((v) => (
+                            <option key={v} value={v}>{etiqueta(v)}</option>
+                          ))}
                         </select>
                       </form>
                     ) : (

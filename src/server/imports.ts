@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import type { ActionState } from "@/lib/types";
+import { getTodasLasOpciones } from "@/server/opciones";
 
 /** Parsea fechas en YYYY-MM-DD o DD-MM-YYYY. */
 function parseFecha(str: string): Date {
@@ -168,6 +169,8 @@ function extraerOcs(r: Record<string, string>): OcImport[] {
   return ocs;
 }
 
+const MONEDAS_VALIDAS = ["CLP", "PEN", "USD"];
+
 export async function importarNegocios(
   _prev: ActionState,
   fd: FormData,
@@ -183,6 +186,8 @@ export async function importarNegocios(
   } catch {
     return { error: "Datos inválidos" };
   }
+
+  const opciones = await getTodasLasOpciones();
 
   let creados = 0;
   const errores: { fila: number; mensaje: string }[] = [];
@@ -222,19 +227,32 @@ export async function importarNegocios(
         continue;
       }
 
-      const tipoNegocio = r.tipoNegocio?.trim().toUpperCase() as
-        | "CORPORATIVO"
-        | "RETAIL";
-      const tipoVenta = r.tipoVenta?.trim().toUpperCase() as
-        | "SENCE"
-        | "NO_SENCE";
-      const tipoDocto = r.tipoDocto?.trim().toUpperCase() as
-        | "FACTURA"
-        | "BOLETA"
-        | "ORDEN_COMPRA";
-      const estadoNegocio = (
-        r.estadoNegocio?.trim().toUpperCase() || "MATRICULADO"
-      ) as "MATRICULADO" | "DE_BAJA" | "DESISTE";
+      const tipoNegocio = r.tipoNegocio?.trim();
+      const tipoVenta = r.tipoVenta?.trim();
+      const tipoDocto = r.tipoDocto?.trim();
+      const estadoNegocio = r.estadoNegocio?.trim() || "MATRICULADO";
+      const moneda = r.moneda?.trim().toUpperCase() || "CLP";
+
+      if (!opciones.tiposNegocio.includes(tipoNegocio)) {
+        errores.push({ fila, mensaje: `Tipo negocio inválido: "${tipoNegocio}". Válidos: ${opciones.tiposNegocio.join(", ")}` });
+        continue;
+      }
+      if (!opciones.tiposVenta.includes(tipoVenta)) {
+        errores.push({ fila, mensaje: `Tipo venta inválido: "${tipoVenta}". Válidos: ${opciones.tiposVenta.join(", ")}` });
+        continue;
+      }
+      if (!opciones.tiposDocto.includes(tipoDocto)) {
+        errores.push({ fila, mensaje: `Tipo documento inválido: "${tipoDocto}". Válidos: ${opciones.tiposDocto.join(", ")}` });
+        continue;
+      }
+      if (!opciones.estadosNegocio.includes(estadoNegocio)) {
+        errores.push({ fila, mensaje: `Estado inválido: "${estadoNegocio}". Válidos: ${opciones.estadosNegocio.join(", ")}` });
+        continue;
+      }
+      if (!MONEDAS_VALIDAS.includes(moneda)) {
+        errores.push({ fila, mensaje: `Moneda inválida: "${moneda}". Válidas: ${MONEDAS_VALIDAS.join(", ")}` });
+        continue;
+      }
 
       const negocio = await prisma.negocio.create({
         data: {
@@ -242,6 +260,7 @@ export async function importarNegocios(
           idAlumno: alumno.idAlumno,
           codPrograma: programa.codPrograma,
           montoNegocio: Number(r.montoNegocio?.trim()),
+          moneda: moneda as "CLP" | "PEN" | "USD",
           tipoNegocio,
           tipoVenta,
           tipoDocto,

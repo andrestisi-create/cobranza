@@ -9,7 +9,7 @@ import {
   eliminarPago,
 } from "@/server/actions";
 import type { ActionState } from "@/lib/types";
-import { formatCLP, formatFecha, etiqueta } from "@/lib/format";
+import { formatCLP, formatMonto, formatFecha, etiqueta } from "@/lib/format";
 import {
   EstadoNegocioBadge,
   EstadoCobranzaBadge,
@@ -82,9 +82,11 @@ function Dato({ label, value }: { label: string; value: React.ReactNode }) {
 export function PanelNegocio({
   negocio,
   puedeEliminar,
+  tiposDocto,
 }: {
   negocio: NegocioCobranza;
   puedeEliminar: boolean;
+  tiposDocto: string[];
 }) {
   const n = negocio;
 
@@ -98,6 +100,7 @@ export function PanelNegocio({
             <EstadoNegocioBadge estado={n.estadoNegocio} />
             <TipoVentaBadge tipo={n.tipoVenta} />
             <Badge color="slate">{etiqueta(n.tipoNegocio)}</Badge>
+            {n.moneda !== "CLP" && <Badge color="indigo">{n.moneda}</Badge>}
             {n.esSence &&
               (n.tieneDocumento ? (
                 <Badge color="green">Con documento</Badge>
@@ -108,15 +111,15 @@ export function PanelNegocio({
           <div className="grid grid-cols-3 gap-3 text-center">
             <div>
               <div className="text-xs text-slate-400">Monto</div>
-              <div className="text-sm font-bold text-slate-900">{formatCLP(n.montoNegocio)}</div>
+              <div className="text-sm font-bold text-slate-900">{formatMonto(n.montoNegocio, n.moneda)}</div>
             </div>
             <div>
               <div className="text-xs text-slate-400">Pagado</div>
-              <div className="text-sm font-bold text-emerald-600">{formatCLP(n.totalPagado)}</div>
+              <div className="text-sm font-bold text-emerald-600">{formatMonto(n.totalPagado, n.moneda)}</div>
             </div>
             <div>
               <div className="text-xs text-slate-400">Saldo</div>
-              <div className="text-sm font-bold text-red-600">{formatCLP(n.saldo)}</div>
+              <div className="text-sm font-bold text-red-600">{formatMonto(n.saldo, n.moneda)}</div>
             </div>
           </div>
           <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
@@ -338,10 +341,10 @@ export function PanelNegocio({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={labelCls}>Tipo</label>
-              <select name="tipoDocto" className={inputCls} defaultValue="FACTURA">
-                <option value="FACTURA">Factura</option>
-                <option value="BOLETA">Boleta</option>
-                <option value="ORDEN_COMPRA">Orden de Compra</option>
+              <select name="tipoDocto" className={inputCls} defaultValue={tiposDocto[0] ?? "FACTURA"}>
+                {tiposDocto.map((v) => (
+                  <option key={v} value={v}>{etiqueta(v)}</option>
+                ))}
               </select>
             </div>
             <div>
