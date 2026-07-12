@@ -176,7 +176,11 @@ export async function importarNegocios(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  await requireGestion();
+  try {
+    await requireGestion();
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Sin permisos" };
+  }
 
   const raw = fd.get("json");
   if (!raw) return { error: "No se recibieron datos" };
@@ -188,7 +192,12 @@ export async function importarNegocios(
     return { error: "Datos inválidos" };
   }
 
-  const opciones = await getTodasLasOpciones();
+  let opciones;
+  try {
+    opciones = await getTodasLasOpciones();
+  } catch (e) {
+    return { error: `No se pudieron cargar los catálogos: ${e instanceof Error ? e.message : "error desconocido"}` };
+  }
 
   let creados = 0;
   const errores: { fila: number; mensaje: string }[] = [];
@@ -286,10 +295,10 @@ export async function importarNegocios(
       }
 
       creados++;
-    } catch {
+    } catch (e) {
       errores.push({
         fila,
-        mensaje: "No se pudo crear el negocio (¿Record ID duplicado?)",
+        mensaje: `No se pudo crear el negocio: ${e instanceof Error ? e.message : "error desconocido"}`,
       });
     }
   }
@@ -395,10 +404,10 @@ export async function importarPagos(
       }
 
       creados++;
-    } catch {
+    } catch (e) {
       errores.push({
         fila,
-        mensaje: "No se pudo registrar el pago (verifique los datos)",
+        mensaje: `No se pudo registrar el pago: ${e instanceof Error ? e.message : "error desconocido"}`,
       });
     }
   }
