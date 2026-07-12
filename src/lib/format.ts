@@ -11,28 +11,30 @@ export function toNumber(value: Numerico): number {
   return Number(value.toString());
 }
 
-/** Formatea un monto en pesos chilenos (sin decimales). */
+/** Formatea un monto en pesos chilenos (hasta 2 decimales, sin forzar mostrarlos). */
 export function formatCLP(value: Numerico): string {
   return new Intl.NumberFormat("es-CL", {
     style: "currency",
     currency: "CLP",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(toNumber(value));
 }
 
-const MONEDA_CONFIG: Record<string, { locale: string; currency: string; decimales: number }> = {
-  CLP: { locale: "es-CL", currency: "CLP", decimales: 0 },
-  PEN: { locale: "es-PE", currency: "PEN", decimales: 2 },
-  USD: { locale: "en-US", currency: "USD", decimales: 2 },
+const MONEDA_CONFIG: Record<string, { locale: string; currency: string }> = {
+  CLP: { locale: "es-CL", currency: "CLP" },
+  PEN: { locale: "es-PE", currency: "PEN" },
+  USD: { locale: "en-US", currency: "USD" },
 };
 
-/** Formatea un monto según la moneda del negocio (CLP/PEN/USD). Sin conversión de tipo de cambio. */
+/** Formatea un monto según la moneda del negocio (CLP/PEN/USD), hasta 2 decimales. Sin conversión de tipo de cambio. */
 export function formatMonto(value: Numerico, moneda: string | null | undefined): string {
   const cfg = MONEDA_CONFIG[moneda ?? "CLP"] ?? MONEDA_CONFIG.CLP;
   return new Intl.NumberFormat(cfg.locale, {
     style: "currency",
     currency: cfg.currency,
-    maximumFractionDigits: cfg.decimales,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(toNumber(value));
 }
 

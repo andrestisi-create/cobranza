@@ -192,7 +192,7 @@ export function PanelNegocio({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={labelCls}>Monto</label>
-              <input name="montoPago" type="number" min="1" step="1" required className={inputCls} />
+              <input name="montoPago" type="number" min="0.01" step="0.01" required className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Fecha</label>
@@ -288,7 +288,7 @@ export function PanelNegocio({
               </div>
               <div>
                 <label className={labelCls}>Monto</label>
-                <input name="monto" type="number" min="1" step="1" required className={inputCls} />
+                <input name="monto" type="number" min="0.01" step="0.01" required className={inputCls} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -359,7 +359,7 @@ export function PanelNegocio({
             </div>
             <div>
               <label className={labelCls}>Monto</label>
-              <input name="monto" type="number" min="0" step="1" className={inputCls} />
+              <input name="monto" type="number" min="0" step="0.01" className={inputCls} />
             </div>
           </div>
         </FormAccion>

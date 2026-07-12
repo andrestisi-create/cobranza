@@ -84,19 +84,19 @@ function getColumnasNegocios(opciones: TodasLasOpciones): ColConfig[] { return [
   { campo: "oc1Numero",        label: "OC 1 - N° OC",        requerido: false },
   { campo: "oc1EntidadNombre", label: "OC 1 - Entidad",      requerido: false },
   { campo: "oc1EntidadRut",    label: "OC 1 - RUT entidad",  requerido: false },
-  { campo: "oc1Monto",         label: "OC 1 - Monto (CLP)",  requerido: false, tipo: "numero" },
+  { campo: "oc1Monto",         label: "OC 1 - Monto",        requerido: false, tipo: "numero" },
   // ── Orden de Compra 2 ──────────────────────────────────────────────────────
   { campo: "oc2Tipo",          label: "OC 2 - Tipo",         requerido: false, valoresPermitidos: ["OTIC","OTEC","EMPRESA"] },
   { campo: "oc2Numero",        label: "OC 2 - N° OC",        requerido: false },
   { campo: "oc2EntidadNombre", label: "OC 2 - Entidad",      requerido: false },
   { campo: "oc2EntidadRut",    label: "OC 2 - RUT entidad",  requerido: false },
-  { campo: "oc2Monto",         label: "OC 2 - Monto (CLP)",  requerido: false, tipo: "numero" },
+  { campo: "oc2Monto",         label: "OC 2 - Monto",        requerido: false, tipo: "numero" },
   // ── Orden de Compra 3 ──────────────────────────────────────────────────────
   { campo: "oc3Tipo",          label: "OC 3 - Tipo",         requerido: false, valoresPermitidos: ["OTIC","OTEC","EMPRESA"] },
   { campo: "oc3Numero",        label: "OC 3 - N° OC",        requerido: false },
   { campo: "oc3EntidadNombre", label: "OC 3 - Entidad",      requerido: false },
   { campo: "oc3EntidadRut",    label: "OC 3 - RUT entidad",  requerido: false },
-  { campo: "oc3Monto",         label: "OC 3 - Monto (CLP)",  requerido: false, tipo: "numero" },
+  { campo: "oc3Monto",         label: "OC 3 - Monto",        requerido: false, tipo: "numero" },
 ]; }
 
 // ─────────────────────────────────────────────
@@ -268,14 +268,14 @@ function SeccionOC({
               </div>
               {/* Monto */}
               <div className="col-span-2">
-                {idx === 0 && <p className={labelCls}>Monto (CLP)</p>}
+                {idx === 0 && <p className={labelCls}>Monto</p>}
                 <input
                   type="number"
                   value={oc.monto}
                   onChange={(e) => actualizar(idx, "monto", e.target.value)}
                   placeholder="0"
-                  min="1"
-                  step="1"
+                  min="0.01"
+                  step="0.01"
                   className={inputSmCls}
                 />
               </div>
@@ -454,8 +454,8 @@ function FormNegocio({
           <input
             name="montoNegocio"
             type="number"
-            min="1"
-            step="1"
+            min="0.01"
+            step="0.01"
             required
             value={montoInput}
             onChange={(e) => setMontoInput(e.target.value)}

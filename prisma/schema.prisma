@@ -1,5 +1,5 @@
 // Esquema de datos — Software de Cobranza y Pre-Cobranza (empresa de educación)
-// Montos en CLP (enteros, sin decimales) -> Decimal(14,0).
+// Montos: hasta 2 decimales para todas las monedas (CLP/PEN/USD) -> Decimal(14,2).
 
 generator client {
   provider      = "prisma-client-js"
@@ -131,7 +131,7 @@ model Negocio {
   idVendedor    String?
   fechaCreacion DateTime      @default(now())
   estadoNegocio String        @default("MATRICULADO")
-  montoNegocio  Decimal       @db.Decimal(14, 0)
+  montoNegocio  Decimal       @db.Decimal(14, 2)
   moneda        Moneda        @default(CLP)
   tipoNegocio   String
   tipoVenta     String
@@ -162,7 +162,7 @@ model OrdenCompra {
   numeroOC      String
   entidadNombre String
   entidadRut    String?
-  monto         Decimal  @db.Decimal(14, 0)
+  monto         Decimal  @db.Decimal(14, 2)
   fechaOC       DateTime?
   estadoOC      EstadoOC @default(PENDIENTE)
   observacion   String?
@@ -180,7 +180,7 @@ model Pago {
   id             String    @id @default(cuid())
   recordId       String
   fechaPago      DateTime  @default(now())
-  montoPago      Decimal   @db.Decimal(14, 0)
+  montoPago      Decimal   @db.Decimal(14, 2)
   medioPago      MedioPago @default(TRANSFERENCIA)
   referencia     String?
   observacion    String?
@@ -202,7 +202,7 @@ model DocumentoTributario {
   tipoDocto   String
   folio       String?
   fechaEmision DateTime?
-  monto       Decimal?  @db.Decimal(14, 0)
+  monto       Decimal?  @db.Decimal(14, 2)
   createdAt   DateTime  @default(now())
 
   negocio Negocio @relation(fields: [recordId], references: [recordId], onDelete: Cascade)
